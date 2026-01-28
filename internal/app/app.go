@@ -223,7 +223,7 @@ func (a *Application) View() string {
 	headerInfo := ui.RenderHeaderInfo(a.sizing, a.theme, headerState)
 	headerText := ui.RenderHeader(a.sizing, a.theme, headerInfo)
 
-	footerText := ui.RenderFooter(a.footerHint, a.theme, a.sizing.TerminalWidth)
+	footerText := a.GetFooterContent()
 
 	// Render confirmation dialog if active (TIT pattern)
 	if a.confirmDialog != nil && a.confirmDialog.Active {
@@ -325,9 +325,47 @@ func (a *Application) renderMenuWithBanner() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, menuColumn, bannerColumn)
 }
 
-// GetVisibleRows returns visible menu items (all items, no filtering needed with MenuRow)
+// GetVisibleRows returns only visible AND selectable menu items (excludes hidden rows and separator)
 func (a *Application) GetVisibleRows() []ui.MenuRow {
-	return a.menuItems
+	var visible []ui.MenuRow
+	for _, row := range a.menuItems {
+		if row.Visible && row.IsSelectable {
+			visible = append(visible, row)
+		}
+	}
+	return visible
+}
+
+// GetVisibleIndex returns the visible index for a given row ID
+// Returns -1 if row is hidden
+func (a *Application) GetVisibleIndex(rowID string) int {
+	visibleIndex := 0
+	for _, row := range a.menuItems {
+		if row.ID == rowID {
+			if row.Visible {
+				return visibleIndex
+			}
+			return -1
+		}
+		if row.Visible {
+			visibleIndex++
+		}
+	}
+	return -1
+}
+
+// GetArrayIndex returns the array index for a given visible index
+func (a *Application) GetArrayIndex(visibleIdx int) int {
+	visibleCount := 0
+	for i, row := range a.menuItems {
+		if row.Visible {
+			if visibleCount == visibleIdx {
+				return i
+			}
+			visibleCount++
+		}
+	}
+	return -1
 }
 
 // GetVisiblePreferenceRows returns visible preference rows (stub for preferences mode)
@@ -335,17 +373,18 @@ func (a *Application) GetVisiblePreferenceRows() []ui.MenuRow {
 	return []ui.MenuRow{}
 }
 
-// ToggleRowAtIndex handles menu row toggle/action at given index
-func (a *Application) ToggleRowAtIndex(index int) (bool, tea.Cmd) {
-	if index < 0 || index >= len(a.menuItems) {
+// ToggleRowAtIndex handles menu row toggle/action at given VISIBLE index
+func (a *Application) ToggleRowAtIndex(visibleIndex int) (bool, tea.Cmd) {
+	arrayIndex := a.GetArrayIndex(visibleIndex)
+	if arrayIndex < 0 || arrayIndex >= len(a.menuItems) {
 		return false, nil
 	}
 
-	row := a.menuItems[index]
+	row := a.menuItems[arrayIndex]
 	return a.executeRowAction(row.ID)
 }
 
-// RowIndexByID finds the index of a row by its ID
+// RowIndexByID finds the ARRAY index of a row by its ID (legacy, use GetVisibleIndex)
 func (a *Application) RowIndexByID(rowID string) int {
 	for i, row := range a.menuItems {
 		if row.ID == rowID {
@@ -366,6 +405,7 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 	case "generator":
 		// Cycle to next generator
 		a.projectState.CycleToNextGenerator()
+		a.menuItems = a.GenerateMenu()
 		return true, nil
 	case "regenerate":
 		_, cmd := a.startGenerateOperation()
@@ -376,6 +416,7 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 	case "configuration":
 		// Cycle to next configuration
 		a.projectState.CycleConfiguration()
+		a.menuItems = a.GenerateMenu()
 		return true, nil
 	case "build":
 		_, cmd := a.startBuildOperation()
@@ -536,54 +577,94 @@ func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			handled, cmd := a.ToggleRowAtIndex(a.selectedIndex)
 			if handled {
 				a.menuItems = a.GenerateMenu()
+				// Clamp selectedIndex if visible count changed
+				newVisible := a.GetVisibleRows()
+				if a.selectedIndex >= len(newVisible) {
+					a.selectedIndex = len(newVisible) - 1
+				}
+				if a.selectedIndex < 0 {
+					a.selectedIndex = 0
+				}
 				return a, cmd
 			}
 		}
 		return a, nil
 	case "g", "G":
 		// Generate/Regenerate - jump to row and execute
-		idx := a.RowIndexByID("generate")
+		idx := a.GetVisibleIndex("generate")
 		if idx >= 0 {
 			a.selectedIndex = idx
 			handled, cmd := a.ToggleRowAtIndex(idx)
 			if handled {
 				a.menuItems = a.GenerateMenu()
+				// Clamp selectedIndex if visible count changed
+				newVisible := a.GetVisibleRows()
+				if a.selectedIndex >= len(newVisible) {
+					a.selectedIndex = len(newVisible) - 1
+				}
+				if a.selectedIndex < 0 {
+					a.selectedIndex = 0
+				}
 				return a, cmd
 			}
 		}
 		return a, nil
 	case "o", "O":
 		// Open IDE - jump to row and execute
-		idx := a.RowIndexByID("openIde")
+		idx := a.GetVisibleIndex("openIde")
 		if idx >= 0 {
 			a.selectedIndex = idx
 			handled, cmd := a.ToggleRowAtIndex(idx)
 			if handled {
 				a.menuItems = a.GenerateMenu()
+				// Clamp selectedIndex if visible count changed
+				newVisible := a.GetVisibleRows()
+				if a.selectedIndex >= len(newVisible) {
+					a.selectedIndex = len(newVisible) - 1
+				}
+				if a.selectedIndex < 0 {
+					a.selectedIndex = 0
+				}
 				return a, cmd
 			}
 		}
 		return a, nil
 	case "b", "B":
 		// Build - jump to row and execute
-		idx := a.RowIndexByID("build")
+		idx := a.GetVisibleIndex("build")
 		if idx >= 0 {
 			a.selectedIndex = idx
 			handled, cmd := a.ToggleRowAtIndex(idx)
 			if handled {
 				a.menuItems = a.GenerateMenu()
+				// Clamp selectedIndex if visible count changed
+				newVisible := a.GetVisibleRows()
+				if a.selectedIndex >= len(newVisible) {
+					a.selectedIndex = len(newVisible) - 1
+				}
+				if a.selectedIndex < 0 {
+					a.selectedIndex = 0
+				}
 				return a, cmd
 			}
 		}
 		return a, nil
 	case "c", "C":
 		// Clean - jump to row and execute
-		idx := a.RowIndexByID("clean")
+		idx := a.GetVisibleIndex("clean")
 		if idx >= 0 {
 			a.selectedIndex = idx
 			handled, cmd := a.ToggleRowAtIndex(idx)
 			if handled {
 				a.menuItems = a.GenerateMenu()
+				// Clamp selectedIndex if visible count changed
+				newVisible := a.GetVisibleRows()
+				if a.selectedIndex >= len(newVisible) {
+					a.selectedIndex = len(newVisible) - 1
+				}
+				if a.selectedIndex < 0 {
+					a.selectedIndex = 0
+				}
 				return a, cmd
 			}
 		}
@@ -593,11 +674,9 @@ func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if a.mode == ModeMenu {
 			a.mode = ModePreferences
 			a.selectedIndex = 0
-			a.footerHint = FooterHints["preferences"]
 		} else if a.mode == ModePreferences {
 			a.mode = ModeMenu
 			a.selectedIndex = 0
-			a.footerHint = FooterHints["menu_navigate"]
 		}
 		return a, nil
 	case "ctrl+c":

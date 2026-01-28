@@ -8,8 +8,7 @@ import (
 
 func BuildCMakeCommand(generator string, projectRoot string) (string, []string, error) {
 	validGenerators := []string{
-		"Xcode", "Ninja", "Visual Studio",
-		"Unix Makefiles", "Ninja Multi-Config",
+		"Xcode", "Ninja", "Visual Studio", "Ninja Multi-Config",
 	}
 
 	isValid := false
@@ -45,8 +44,6 @@ func BuildBuildCommand(generator string, buildDir string) (string, []string, err
 		return "cmake", []string{"--build", buildDir, "--config", "Release"}, nil
 	case "Visual Studio":
 		return "cmake", []string{"--build", buildDir, "--config", "Release"}, nil
-	case "Unix Makefiles":
-		return "make", []string{"-C", buildDir}, nil
 	default:
 		return "cmake", []string{"--build", buildDir}, nil
 	}

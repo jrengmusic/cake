@@ -13,9 +13,9 @@ func GetPlatformGenerators() []string {
 	case "windows":
 		return []string{"Visual Studio", "Ninja Multi-Config"}
 	case "linux":
-		return []string{"Ninja", "Unix Makefiles"}
+		return []string{"Ninja"}
 	default:
-		return []string{"Unix Makefiles"}
+		return []string{"Ninja"}
 	}
 }
 

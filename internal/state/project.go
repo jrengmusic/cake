@@ -134,13 +134,6 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 		})
 	}
 
-	// Unix Makefiles is always available as fallback
-	ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-		Name:          "Unix Makefiles",
-		IsIDE:         false,
-		IsMultiConfig: false,
-	})
-
 	// Check Visual Studio (Windows only)
 	if runtime.GOOS == "windows" {
 		// Check for Visual Studio via vswhere or cmake generator availability
@@ -392,7 +385,19 @@ func (ps *ProjectState) CanOpenEditor() bool {
 
 // GetGeneratorLabel returns a display-friendly generator name
 func (ps *ProjectState) GetGeneratorLabel() string {
-	return ps.SelectedGenerator
+	name := ps.SelectedGenerator
+
+	// Truncate long names for display
+	switch name {
+	case "Ninja Multi-Config":
+		return "Ninja (multi)"
+	case "Visual Studio 17 2022":
+		return "VS 2022"
+	case "Visual Studio 16 2019":
+		return "VS 2019"
+	default:
+		return name
+	}
 }
 
 // GetProjectName extracts project name using layered file parsing

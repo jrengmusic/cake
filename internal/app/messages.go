@@ -1,6 +1,10 @@
 package app
 
-import "time"
+import (
+	"time"
+
+	"cake/internal/ui"
+)
 
 type TickMsg time.Time
 
@@ -97,4 +101,32 @@ var OutputMessages = map[string]string{
 	"setup_starting":      "Configuring CMake...",
 	"build_starting":      "Compiling project...",
 	"clean_starting":      "Removing build artifacts...",
+}
+
+// FooterHintShortcuts defines all mode-specific footer shortcuts (SSOT)
+// Key = mode identifier, Value = list of shortcuts
+var FooterHintShortcuts = map[string][]ui.FooterShortcut{
+	// Console mode - shows scroll controls
+	"console_running": {
+		{Key: "↑↓", Desc: "scroll"},
+		{Key: "Esc", Desc: "abort"},
+	},
+	"console_complete": {
+		{Key: "↑↓", Desc: "scroll"},
+		{Key: "Esc", Desc: "back"},
+	},
+
+	// Preferences mode
+	"preferences": {
+		{Key: "↑↓", Desc: "navigate"},
+		{Key: "Enter", Desc: "change"},
+		{Key: "/", Desc: "back"},
+	},
+
+	// Confirmation dialog
+	"confirmation": {
+		{Key: "←→", Desc: "select"},
+		{Key: "Enter", Desc: "confirm"},
+		{Key: "Esc", Desc: "cancel"},
+	},
 }
