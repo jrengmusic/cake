@@ -145,7 +145,7 @@
 ## ROLE ASSIGNMENT REGISTRATION
 
 COUNSELOR: OpenCode (glm-4.7)
-ENGINEER: OpenCode (glm-4.7)
+ENGINEER: OpenCode (MiniMax-M2.1)
 SURGEON: OpenCode (glm-4.6)
 AUDITOR: [Agent (Model)] or [Not Assigned]
 MACHINIST: Gemini (Gemini 2.0 Flash)
