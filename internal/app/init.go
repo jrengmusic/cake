@@ -32,7 +32,7 @@ func NewApplication() *Application {
 		sizing:          ui.NewDynamicSizing(),
 		mode:            ModeMenu,
 		selectedIndex:   0,
-		menuItems:       []PreferenceRow{},
+		menuItems:       []ui.MenuRow{},
 		projectState:    state.NewProjectState(),
 		config:          cfg,
 		outputBuffer:    ui.GetBuffer(),

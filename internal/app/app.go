@@ -30,7 +30,7 @@ type Application struct {
 
 	mode          AppMode
 	selectedIndex int
-	menuItems     []PreferenceRow
+	menuItems     []ui.MenuRow
 
 	projectState *state.ProjectState
 	config       *config.Config
@@ -288,8 +288,8 @@ func (a *Application) renderMenuWithBanner() string {
 	leftWidth := a.sizing.ContentInnerWidth / 2
 	rightWidth := a.sizing.ContentInnerWidth - leftWidth
 
-	// Render menu in left column
-	menuContent := a.renderPreferenceMenu(leftWidth)
+	// Render menu in left column using new ui.RenderCakeMenu
+	menuContent := ui.RenderCakeMenu(a.menuItems, a.selectedIndex, a.theme, a.sizing.ContentHeight, leftWidth)
 
 	menuColumn := lipgloss.NewStyle().
 		Width(leftWidth).
@@ -312,61 +312,66 @@ func (a *Application) renderMenuWithBanner() string {
 	return lipgloss.JoinHorizontal(lipgloss.Top, menuColumn, bannerColumn)
 }
 
-// renderPreferenceMenu renders the preference-style menu
-// Format: EMOJI | LABEL | VALUE
-func (a *Application) renderPreferenceMenu(maxWidth int) string {
-	visibleRows := a.GetVisibleRows()
+// GetVisibleRows returns visible menu items (all items, no filtering needed with MenuRow)
+func (a *Application) GetVisibleRows() []ui.MenuRow {
+	return a.menuItems
+}
 
-	var lines []string
+// GetVisiblePreferenceRows returns visible preference rows (stub for preferences mode)
+func (a *Application) GetVisiblePreferenceRows() []ui.MenuRow {
+	return []ui.MenuRow{}
+}
 
-	for i, row := range visibleRows {
-		if row.Separator {
-			// Render separator line
-			line := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(a.theme.SeparatorColor)).
-				Render(strings.Repeat("─", maxWidth))
-			lines = append(lines, line)
-			continue
-		}
-
-		var line string
-
-		// Format: "EMOJI  LABEL           VALUE"
-		emoji := row.Emoji + " "
-		label := row.Label
-		value := row.Value
-
-		// Calculate spacing to right-align value
-		contentWidth := lipgloss.Width(emoji) + lipgloss.Width(label) + lipgloss.Width(value)
-		valueSpacing := ""
-		if maxWidth > contentWidth {
-			valueSpacing = strings.Repeat(" ", maxWidth-contentWidth)
-		}
-
-		rowText := emoji + label + valueSpacing + value
-
-		if i == a.selectedIndex {
-			// Selected row
-			line = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(a.theme.MainBackgroundColor)).
-				Background(lipgloss.Color(a.theme.MenuSelectionBackground)).
-				Bold(true).
-				Width(maxWidth).
-				Align(lipgloss.Left).
-				Render(rowText)
-		} else {
-			// Normal row
-			line = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(a.theme.LabelTextColor)).
-				Width(maxWidth).
-				Align(lipgloss.Left).
-				Render(rowText)
-		}
-
-		lines = append(lines, line)
+// ToggleRowAtIndex handles menu row toggle/action at given index
+func (a *Application) ToggleRowAtIndex(index int) (bool, tea.Cmd) {
+	if index < 0 || index >= len(a.menuItems) {
+		return false, nil
 	}
 
-	return strings.Join(lines, "\n")
+	row := a.menuItems[index]
+	return a.executeRowAction(row.ID)
+}
+
+// RowIndexByID finds the index of a row by its ID
+func (a *Application) RowIndexByID(rowID string) int {
+	for i, row := range a.menuItems {
+		if row.ID == rowID {
+			return i
+		}
+	}
+	return -1
+}
+
+// TogglePreferenceAtIndex toggles preference at index (stub for preferences mode)
+func (a *Application) TogglePreferenceAtIndex(index int) bool {
+	return false
+}
+
+// executeRowAction executes the action associated with a menu row
+func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
+	switch rowID {
+	case "generator":
+		// Cycle to next generator
+		a.projectState.CycleToNextGenerator()
+		return true, nil
+	case "regenerate":
+		_, cmd := a.startGenerateOperation()
+		return true, cmd
+	case "openIde":
+		_, cmd := a.startOpenIDEOperation()
+		return true, cmd
+	case "configuration":
+		// Cycle to next configuration
+		a.projectState.CycleConfiguration()
+		return true, nil
+	case "build":
+		_, cmd := a.startBuildOperation()
+		return true, cmd
+	case "clean":
+		_, cmd := a.startCleanOperation()
+		return true, cmd
+	}
+	return false, nil
 }
 
 // renderPreferencesWithBanner renders preferences (left 50%) + banner (right 50%)
@@ -400,11 +405,11 @@ func (a *Application) renderPreferencesWithBanner() string {
 }
 
 // renderPreferenceMenuRows renders preference rows with proper formatting
-func (a *Application) renderPreferenceMenuRows(maxWidth int, rows []PreferenceRow) string {
+func (a *Application) renderPreferenceMenuRows(maxWidth int, rows []ui.MenuRow) string {
 	var lines []string
 
 	for i, row := range rows {
-		if row.Separator {
+		if row.ID == "separator" {
 			// Render separator line
 			line := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(a.theme.SeparatorColor)).
@@ -487,42 +492,87 @@ func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	visibleRows := a.GetVisibleRows()
 	visibleCount := len(visibleRows)
 
+	// Helper: find next visible index (already skips hidden/separator via GetVisibleRows)
+	findNextVisibleIndex := func(current, direction int) int {
+		next := current + direction
+		if next < 0 {
+			return 0
+		}
+		if next >= visibleCount {
+			return visibleCount - 1
+		}
+		return next
+	}
+
 	switch msg.String() {
 	case "up", "k":
-		// Move up, skipping separators (robust boundary check)
+		// Move up using visible indices
 		if a.selectedIndex > 0 {
-			nextIndex := a.selectedIndex - 1
-			// Skip separator rows going up
-			for nextIndex >= 0 && visibleRows[nextIndex].Separator {
-				nextIndex--
-			}
-			// Only apply if we found a valid slot
-			if nextIndex >= 0 {
-				a.selectedIndex = nextIndex
-			}
+			a.selectedIndex = findNextVisibleIndex(a.selectedIndex, -1)
 		}
 		return a, nil
 	case "down", "j":
-		// Move down, skipping separators (robust boundary check)
+		// Move down using visible indices
 		if a.selectedIndex < visibleCount-1 {
-			nextIndex := a.selectedIndex + 1
-			// Skip separator rows going down
-			for nextIndex < visibleCount && visibleRows[nextIndex].Separator {
-				nextIndex++
-			}
-			// Only apply if we found a valid slot
-			if nextIndex < visibleCount {
-				a.selectedIndex = nextIndex
-			}
+			a.selectedIndex = findNextVisibleIndex(a.selectedIndex, 1)
 		}
 		return a, nil
 	case "enter", " ":
-		// Toggle or execute action at selected index
-		handled, cmd := a.ToggleRowAtIndex(a.selectedIndex)
-		if handled {
-			// Refresh menu after toggle (to update dynamic labels)
-			a.menuItems = a.GenerateMenu()
-			return a, cmd
+		// Execute action at selected visible index
+		if a.selectedIndex >= 0 && a.selectedIndex < visibleCount {
+			handled, cmd := a.ToggleRowAtIndex(a.selectedIndex)
+			if handled {
+				a.menuItems = a.GenerateMenu()
+				return a, cmd
+			}
+		}
+		return a, nil
+	case "g", "G":
+		// Generate/Regenerate - jump to row and execute
+		idx := a.RowIndexByID("generate")
+		if idx >= 0 {
+			a.selectedIndex = idx
+			handled, cmd := a.ToggleRowAtIndex(idx)
+			if handled {
+				a.menuItems = a.GenerateMenu()
+				return a, cmd
+			}
+		}
+		return a, nil
+	case "o", "O":
+		// Open IDE - jump to row and execute
+		idx := a.RowIndexByID("openIde")
+		if idx >= 0 {
+			a.selectedIndex = idx
+			handled, cmd := a.ToggleRowAtIndex(idx)
+			if handled {
+				a.menuItems = a.GenerateMenu()
+				return a, cmd
+			}
+		}
+		return a, nil
+	case "b", "B":
+		// Build - jump to row and execute
+		idx := a.RowIndexByID("build")
+		if idx >= 0 {
+			a.selectedIndex = idx
+			handled, cmd := a.ToggleRowAtIndex(idx)
+			if handled {
+				a.menuItems = a.GenerateMenu()
+				return a, cmd
+			}
+		}
+		return a, nil
+	case "c", "C":
+		// Clean - jump to row and execute
+		idx := a.RowIndexByID("clean")
+		if idx >= 0 {
+			a.selectedIndex = idx
+			handled, cmd := a.ToggleRowAtIndex(idx)
+			if handled {
+				a.menuItems = a.GenerateMenu()
+				return a, cmd
+			}
 		}
 		return a, nil
 	case "/":
@@ -553,7 +603,7 @@ func (a *Application) handlePreferencesKeyPress(msg tea.KeyMsg) (tea.Model, tea.
 		if a.selectedIndex > 0 {
 			nextIndex := a.selectedIndex - 1
 			// Skip separator rows going up
-			for nextIndex >= 0 && visibleRows[nextIndex].Separator {
+			for nextIndex >= 0 && visibleRows[nextIndex].ID == "separator" {
 				nextIndex--
 			}
 			// Only apply if we found a valid slot
@@ -567,7 +617,7 @@ func (a *Application) handlePreferencesKeyPress(msg tea.KeyMsg) (tea.Model, tea.
 		if a.selectedIndex < visibleCount-1 {
 			nextIndex := a.selectedIndex + 1
 			// Skip separator rows going down
-			for nextIndex < visibleCount && visibleRows[nextIndex].Separator {
+			for nextIndex < visibleCount && visibleRows[nextIndex].ID == "separator" {
 				nextIndex++
 			}
 			// Only apply if we found a valid slot

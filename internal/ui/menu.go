@@ -6,131 +6,198 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// RenderMenuWithHeight renders menu items centered with 3-column layout (KEY | EMOJI | LABEL)
-// items must be []map[string]interface{} (converted by app.menuItemsToMaps)
-func RenderMenuWithHeight(items interface{}, selectedIndex int, theme Theme, contentHeight int, contentWidth int) string {
-	// Type assertion to handle app.MenuItem
-	var menuItems []map[string]interface{}
+// MenuRow represents a single menu row
+// Fixed 7 rows: [0]Generator [1]Regenerate [2]OpenIDE [3]Separator [4]Configuration [5]Build [6]Clean
+type MenuRow struct {
+	ID       string // "generator", "regenerate", "openIde", "separator", "configuration", "build", "clean"
+	Shortcut string // "", "g", "o", "", "", "b", "c"
+	Emoji    string // "⚙️", "🚀", "📂", "", "🏗️", "🔨", "🧹"
+	Label    string // "Generator", "Regenerate", "Open IDE", "", "Configuration", "Build", "Clean"
+	Value    string // "Xcode", "", "", "", "Debug", "", ""
+	Visible  bool   // true/false based on conditions
+	IsAction bool   // false for toggles, true for actions
+}
 
-	switch v := items.(type) {
-	case []map[string]interface{}:
-		menuItems = v
-	default:
-		// If it's another type, return empty
-		return ""
+// GenerateMenuRows returns exactly 7 rows (used by app.go)
+func GenerateMenuRows(generatorLabel string, configuration string, canOpenIDE bool, canClean bool) []MenuRow {
+	return []MenuRow{
+		{
+			ID:       "generator",
+			Shortcut: "",
+			Emoji:    "⚙️",
+			Label:    "Generator",
+			Value:    generatorLabel,
+			Visible:  true,
+			IsAction: false,
+		},
+		{
+			ID:       "regenerate",
+			Shortcut: "g",
+			Emoji:    "🚀",
+			Label:    "Regenerate",
+			Value:    "",
+			Visible:  true,
+			IsAction: true,
+		},
+		{
+			ID:       "openIde",
+			Shortcut: "o",
+			Emoji:    "📂",
+			Label:    "Open IDE",
+			Value:    "",
+			Visible:  canOpenIDE,
+			IsAction: true,
+		},
+		{
+			ID:       "separator",
+			Shortcut: "",
+			Emoji:    "",
+			Label:    "",
+			Value:    "",
+			Visible:  true,
+			IsAction: false,
+		},
+		{
+			ID:       "configuration",
+			Shortcut: "",
+			Emoji:    "🏗️",
+			Label:    "Configuration",
+			Value:    configuration,
+			Visible:  true,
+			IsAction: false,
+		},
+		{
+			ID:       "build",
+			Shortcut: "b",
+			Emoji:    "🔨",
+			Label:    "Build",
+			Value:    "",
+			Visible:  true,
+			IsAction: true,
+		},
+		{
+			ID:       "clean",
+			Shortcut: "c",
+			Emoji:    "🧹",
+			Label:    "Clean",
+			Value:    "",
+			Visible:  canClean,
+			IsAction: true,
+		},
 	}
+}
 
-	if len(menuItems) == 0 {
-		return ""
-	}
+// RenderCakeMenu renders cake menu with shortcut column
+// Columns: SHORTCUT(3) | EMOJI(3) | LABEL(18) | VALUE(10)
+func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeight int, contentWidth int) string {
+	// Column widths
+	const (
+		shortcutColWidth = 3
+		emojiColWidth    = 3
+		labelColWidth    = 18
+		valueColWidth    = 10
+		menuBoxWidth     = shortcutColWidth + emojiColWidth + labelColWidth + valueColWidth
+	)
 
-	// Column widths for menu box
-	keyColWidth := 3
-	emojiColWidth := 3
-	labelColWidth := 21
-	menuBoxWidth := keyColWidth + emojiColWidth + labelColWidth
-
-	// Build styled lines
 	var lines []string
-	for i, itemMap := range menuItems {
-		// Handle separators
-		if isSep, ok := itemMap["Separator"].(bool); ok && isSep {
-			// Separator spans emoji + label columns only (not shortcut column)
-			keyPad := strings.Repeat(" ", keyColWidth)
-			sepLine := strings.Repeat("─", emojiColWidth+labelColWidth)
-			separator := keyPad + lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.DimmedTextColor)).
-				Render(sepLine)
-			lines = append(lines, separator)
+
+	for i, row := range rows {
+		// Skip rendering content for separator, but still render the line
+		if row.ID == "separator" {
+			sepLine := lipgloss.NewStyle().
+				Foreground(lipgloss.Color(theme.SeparatorColor)).
+				Render(strings.Repeat("─", contentWidth))
+			lines = append(lines, sepLine)
 			continue
 		}
 
-		emoji, _ := itemMap["Emoji"].(string)
-		shortcut, _ := itemMap["Shortcut"].(string)
-		label, _ := itemMap["Label"].(string)
-		enabled, _ := itemMap["Enabled"].(bool)
+		// Hidden rows render as empty line
+		if !row.Visible {
+			lines = append(lines, strings.Repeat(" ", menuBoxWidth))
+			continue
+		}
 
-		// Column 1: KEY (left-aligned)
-		keyCol := shortcut + strings.Repeat(" ", keyColWidth-1)
+		// Column 1: SHORTCUT (left-aligned)
+		shortcutStr := row.Shortcut
+		shortcutW := lipgloss.Width(shortcutStr)
+		shortcutPad := shortcutColWidth - shortcutW
+		if shortcutPad < 0 {
+			shortcutPad = 0
+		}
+		shortcutCol := shortcutStr + strings.Repeat(" ", shortcutPad)
 
 		// Column 2: EMOJI (center-aligned)
-		emojiCol := emoji
-		emojiW := lipgloss.Width(emojiCol)
-		leftPad := (emojiColWidth - emojiW) / 2
-		rightPad := emojiColWidth - emojiW - leftPad
-		if leftPad < 0 {
-			leftPad = 0
-			rightPad = 0
+		emojiStr := row.Emoji
+		emojiW := lipgloss.Width(emojiStr)
+		emojiLeftPad := (emojiColWidth - emojiW) / 2
+		emojiRightPad := emojiColWidth - emojiW - emojiLeftPad
+		if emojiLeftPad < 0 {
+			emojiLeftPad = 0
 		}
-		if rightPad < 0 {
-			rightPad = 0
+		if emojiRightPad < 0 {
+			emojiRightPad = 0
 		}
-		emojiCol = strings.Repeat(" ", leftPad) + emojiCol + strings.Repeat(" ", rightPad)
+		emojiCol := strings.Repeat(" ", emojiLeftPad) + emojiStr + strings.Repeat(" ", emojiRightPad)
 
-		// Column 3: LABEL (left-aligned, truncate if needed)
-		labelCol := label
-		labelW := lipgloss.Width(labelCol)
+		// Column 3: LABEL (left-aligned)
+		labelStr := row.Label
+		labelW := lipgloss.Width(labelStr)
 		if labelW > labelColWidth {
-			labelCol = labelCol[:labelColWidth]
+			labelStr = labelStr[:labelColWidth]
 			labelW = labelColWidth
 		}
-		labelCol = labelCol + strings.Repeat(" ", labelColWidth-labelW)
+		labelCol := labelStr + strings.Repeat(" ", labelColWidth-labelW)
+
+		// Column 4: VALUE (right-aligned)
+		valueStr := row.Value
+		valueW := lipgloss.Width(valueStr)
+		if valueW > valueColWidth {
+			valueStr = valueStr[:valueColWidth]
+			valueW = valueColWidth
+		}
+		valueCol := strings.Repeat(" ", valueColWidth-valueW) + valueStr
 
 		// Build styled line
 		var styledLine string
+		isSelected := i == selectedIndex
 
-		// Check if emoji is a spinner (braille character) for special coloring
-		isSpinner := IsSpinnerFrame(emoji)
-
-		if !enabled {
-			// Disabled: dimmed text, but spinner gets vivid color
-			keyStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.DimmedTextColor))
-			emojiStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.DimmedTextColor))
-			if isSpinner {
-				emojiStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(theme.SpinnerColor))
-			}
-			labelStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.DimmedTextColor))
-			styledLine = keyStyle.Render(keyCol) + emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol)
-		} else if i == selectedIndex {
-			// Selected: highlight background
-			keyStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.AccentTextColor)).
-				Bold(true)
+		if isSelected {
+			// Selected: highlight label+value
+			shortcutStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color(theme.LabelTextColor))
 			emojiStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.LabelTextColor))
-			if isSpinner {
-				emojiStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(theme.SpinnerColor))
-			}
 			labelStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.MainBackgroundColor)).
 				Background(lipgloss.Color(theme.MenuSelectionBackground)).
 				Bold(true)
-			styledLine = keyStyle.Render(keyCol) + emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol)
-		} else {
-			// Normal
-			keyStyle := lipgloss.NewStyle().
+			valueStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.AccentTextColor)).
 				Bold(true)
+			styledLine = shortcutStyle.Render(shortcutCol) +
+				emojiStyle.Render(emojiCol) +
+				labelStyle.Render(labelCol) +
+				valueStyle.Render(valueCol)
+		} else {
+			// Normal
+			shortcutStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color(theme.LabelTextColor))
 			emojiStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.LabelTextColor))
-			if isSpinner {
-				emojiStyle = lipgloss.NewStyle().
-					Foreground(lipgloss.Color(theme.SpinnerColor))
-			}
 			labelStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.LabelTextColor))
-			styledLine = keyStyle.Render(keyCol) + emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol)
+			valueStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color(theme.ContentTextColor))
+			styledLine = shortcutStyle.Render(shortcutCol) +
+				emojiStyle.Render(emojiCol) +
+				labelStyle.Render(labelCol) +
+				valueStyle.Render(valueCol)
 		}
 
 		lines = append(lines, styledLine)
 	}
 
-	// Center menu vertically and horizontally
+	// Center vertically and horizontally
 	innerHeight := contentHeight - 2
 	menuHeight := len(lines)
 	topPad := (innerHeight - menuHeight) / 2
@@ -142,7 +209,6 @@ func RenderMenuWithHeight(items interface{}, selectedIndex int, theme Theme, con
 		bottomPad = 0
 	}
 
-	// Horizontal centering using dynamic width
 	leftPad := (contentWidth - menuBoxWidth) / 2
 	if leftPad < 0 {
 		leftPad = 0
@@ -180,35 +246,4 @@ func RenderMenuWithHeight(items interface{}, selectedIndex int, theme Theme, con
 	}
 
 	return result.String()
-}
-
-// RenderMenuWithBanner renders menu (left column) + banner (right column)
-// 50/50 split, both columns centered H/V
-func RenderMenuWithBanner(sizing DynamicSizing, items interface{}, selectedIndex int, theme Theme) string {
-	// 50/50 split
-	leftWidth := sizing.ContentInnerWidth / 2
-	rightWidth := sizing.ContentInnerWidth - leftWidth
-
-	// Render menu in left column (centered H/V)
-	menuContent := RenderMenuWithHeight(items, selectedIndex, theme, sizing.ContentHeight, leftWidth)
-
-	menuColumn := lipgloss.NewStyle().
-		Width(leftWidth).
-		Height(sizing.ContentHeight).
-		Align(lipgloss.Center).
-		AlignVertical(lipgloss.Center).
-		Render(menuContent)
-
-	// Render banner in right column (centered H/V)
-	banner := RenderBannerDynamic(rightWidth, sizing.ContentHeight)
-
-	bannerColumn := lipgloss.NewStyle().
-		Width(rightWidth).
-		Height(sizing.ContentHeight).
-		Align(lipgloss.Center).
-		AlignVertical(lipgloss.Center).
-		Render(banner)
-
-	// Join horizontally
-	return lipgloss.JoinHorizontal(lipgloss.Top, menuColumn, bannerColumn)
 }

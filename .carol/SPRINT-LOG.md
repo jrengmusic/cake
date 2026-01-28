@@ -160,6 +160,38 @@ JOURNALIST: OpenCode (zai-coding-plan/glm-4.7)
 
 ## SPRINT HISTORY
 
+## Sprint 5 - Menu Layout and Alignment Fix
+**Date:** 2026-01-28
+**Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - MiniMax-M2.1)
+
+### Summary
+Fixed critical menu alignment issues and implemented comprehensive menu refactoring matching TIT's preference layout. Resolved emoji width handling using lipgloss.Width(), fixed selection index bug, added keyboard shortcuts, implemented conditional visibility with placeholder rows, and established fixed 7-item menu structure.
+
+### Tasks Completed
+- **COUNSELOR**: Menu Alignment Analysis - Identified emoji width issue (2 display columns but 4 UTF-8 bytes), designed solution using lipgloss.Width() for proper padding calculation
+- **ENGINEER**: Menu Refactoring Implementation - Rewrote renderPreferenceMenu() with lipgloss.Width() for proper emoji handling, fixed 7-item structure with conditional visibility, added keyboard shortcuts (g, o, b, c), fixed critical selection index bug where navigation used array indices but rendering used visible indices
+- **ENGINEER**: Menu Architecture Rewrite - Complete rewrite of app.go menu handling (65 lines deleted, 50 lines added), removed renderPreferenceMenu() in favor of ui.RenderCakeMenu(), added 6 new functions (GetVisibleRows, GetVisiblePreferenceRows, ToggleRowAtIndex, RowIndexByID, TogglePreferenceAtIndex, executeRowAction), changed to row ID-based navigation instead of index calculations
+
+### Files Modified
+- `internal/app/menu.go` — Added Shortcut field to PreferenceRow struct, rewrote GenerateMenu() to return fixed 7 rows with conditional visibility (placeholder empty rows for hidden items), removed shortcuts from toggle rows
+- `internal/app/app.go` — Complete rewrite of menu handling logic: removed renderPreferenceMenu() (65 lines deleted), added 6 new functions (GetVisibleRows, GetVisiblePreferenceRows, ToggleRowAtIndex, RowIndexByID, TogglePreferenceAtIndex, executeRowAction), updated renderMenuWithBanner() to call ui.RenderCakeMenu() with correct argument order, changed all PreferenceRow → ui.MenuRow type references, changed row.Separator → row.ID == "separator" checks, simplified handleMenuKeyPress() to use ID-based navigation, removed unused fmt import
+- `internal/app/init.go` — Changed menuItems type from []PreferenceRow to []ui.MenuRow
+
+### Notes
+- Fixed column widths: shortcut 3ch, emoji 3ch (centered), label 20ch, value 12ch (total 48ch)
+- Emojis display as 2 terminal columns but are 4 UTF-8 bytes - lipgloss.Width() correctly measures display width
+- Highlight pattern: Only label column gets background highlight when selected
+- Critical bug fix: selectedIndex now uses visible indices (0-5) instead of array indices (0-6)
+- Navigation skips Separator: true and Visible: false rows
+- Actions (Generate, Open IDE, Build, Clean) use shortcuts g, o, b, c
+- Toggles (Generator, Configuration) use Enter/Space only (no shortcuts)
+- Menu architecture complete rewrite: Removed 65 lines of inline rendering, added 50 lines of structured functions
+- executeRowAction handles all 7 menu actions: generator (cycle), regenerate, openIde, configuration (cycle), build, clean
+- Changed from index-based to row ID-based navigation for simpler logic
+- Removed inline menu rendering in favor of ui.RenderCakeMenu() with 4-column layout (shortcut | emoji | label | value)
+- Confirmation dialogs for regenerate/clean not yet re-implemented (requires ui.ConfirmationDialogConfig pattern)
+
+
 ## Sprint 4 - Header Rendering Fix
 **Date:** 2026-01-28
 **Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - MiniMax-M2.1)
