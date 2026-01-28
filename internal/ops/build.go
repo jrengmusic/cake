@@ -18,13 +18,16 @@ func ExecuteBuildProject(generator, config string, projectRoot string, isMultiCo
 	// Multi-config generators (Xcode, VS): Builds/<Generator>/
 	// Single-config generators (Ninja, Makefiles): Builds/<Generator>/<Config>/
 	var buildDir string
-	var args []string
-
 	if isMultiConfig {
 		buildDir = filepath.Join(projectRoot, "Builds", generator)
-		args = []string{"--build", buildDir, "--config", config}
 	} else {
 		buildDir = filepath.Join(projectRoot, "Builds", generator, config)
+	}
+
+	var args []string
+	if isMultiConfig {
+		args = []string{"--build", buildDir, "--config", config}
+	} else {
 		args = []string{"--build", buildDir}
 	}
 

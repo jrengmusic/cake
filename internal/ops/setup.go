@@ -20,9 +20,6 @@ func ExecuteSetupProject(workingDir, generator, config string, isMultiConfig boo
 		return SetupResult{Success: false, Error: "Generator is empty"}
 	}
 
-	// Determine build path based on generator type
-	// Multi-config generators (Xcode, VS): Builds/<Generator>/
-	// Single-config generators (Ninja, Makefiles): Builds/<Generator>/<Config>/
 	var buildDir string
 	if isMultiConfig {
 		buildDir = filepath.Join(workingDir, "Builds", generator)

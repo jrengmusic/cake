@@ -255,6 +255,29 @@ func (ps *ProjectState) GetBuildPath() string {
 	return ""
 }
 
+// GetBuildDirectory returns the build directory path for given generator and config
+func (ps *ProjectState) GetBuildDirectory(generatorName string, config string) string {
+	for _, gen := range ps.AvailableGenerators {
+		if gen.Name == generatorName {
+			if gen.IsMultiConfig {
+				return filepath.Join(ps.WorkingDirectory, "Builds", generatorName)
+			}
+			return filepath.Join(ps.WorkingDirectory, "Builds", generatorName, config)
+		}
+	}
+	return ""
+}
+
+// IsGeneratorMultiConfig returns true if generator is multi-config
+func (ps *ProjectState) IsGeneratorMultiConfig(generatorName string) bool {
+	for _, gen := range ps.AvailableGenerators {
+		if gen.Name == generatorName {
+			return gen.IsMultiConfig
+		}
+	}
+	return false
+}
+
 // scanBuildDirectories scans for existing build directories
 func (ps *ProjectState) scanBuildDirectories(rootDir string) {
 	ps.Builds = make(map[string]BuildInfo)

@@ -2,7 +2,6 @@ package app
 
 import (
 	"cake/internal/config"
-	"cake/internal/ops"
 	"cake/internal/state"
 	"cake/internal/ui"
 	"path/filepath"
@@ -41,8 +40,9 @@ type Application struct {
 	consoleState ui.ConsoleOutState
 	outputBuffer *ui.OutputBuffer
 
-	asyncOperationActive  bool
-	asyncOperationAborted bool
+	asyncState    *AsyncState
+	windowSize    WindowSizeHandler
+	keyDispatcher *KeyDispatcher
 
 	footerHint   string
 	isScanning   bool
@@ -57,6 +57,20 @@ func (a *Application) Init() tea.Cmd {
 	a.projectState.ForceRefresh()
 	a.menuItems = a.GenerateMenu()
 	a.lastBuildDir = a.projectState.GetBuildPath()
+	a.asyncState = NewAsyncState()
+	a.windowSize = WindowSizeHandler{}
+	a.keyDispatcher = NewKeyDispatcher()
+
+	// Register key handlers (wrapped to match dispatcher signature)
+	a.keyDispatcher.Register(ModeMenu, func(app *Application, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return app.handleMenuKeyPress(msg)
+	})
+	a.keyDispatcher.Register(ModePreferences, func(app *Application, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return app.handlePreferencesKeyPress(msg)
+	})
+	a.keyDispatcher.Register(ModeConsole, func(app *Application, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return app.handleOperationKeyPress(msg)
+	})
 
 	// Start auto-scan ticker if enabled
 	if a.config != nil && a.config.IsAutoScanEnabled() {
@@ -79,7 +93,7 @@ func (a *Application) cmdAutoScanTick() tea.Cmd {
 // handleAutoScanTick handles periodic auto-scan
 func (a *Application) handleAutoScanTick() (tea.Model, tea.Cmd) {
 	// Skip scan during async operations
-	if a.asyncOperationActive {
+	if a.asyncState.IsActive() {
 		return a, a.cmdAutoScanTick()
 	}
 
@@ -118,16 +132,15 @@ func (a *Application) handleAutoScanTick() (tea.Model, tea.Cmd) {
 }
 
 func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if a.windowSize.CanHandle(msg) {
+		return a.windowSize.Handle(a, msg)
+	}
+
+	if a.keyDispatcher.CanHandle(msg) {
+		return a.keyDispatcher.Handle(a, msg)
+	}
+
 	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		a.width = msg.Width
-		a.height = msg.Height
-		a.sizing = ui.CalculateDynamicSizing(msg.Width, msg.Height)
-		return a, nil
-
-	case tea.KeyMsg:
-		return a.handleKeyPress(msg)
-
 	case TickMsg:
 		if a.quitConfirmActive && time.Since(a.quitConfirmTime) > 3*time.Second {
 			a.quitConfirmActive = false
@@ -139,7 +152,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleAutoScanTick()
 
 	case GenerateCompleteMsg:
-		a.asyncOperationActive = false
+		a.asyncState.End()
 		a.projectState.ForceRefresh()
 		a.menuItems = a.GenerateMenu()
 		if msg.Success {
@@ -150,7 +163,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case BuildCompleteMsg:
-		a.asyncOperationActive = false
+		a.asyncState.End()
 		if msg.Success {
 			a.footerHint = GetFooterMessageText(MessageOperationComplete)
 		} else {
@@ -159,7 +172,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case CleanCompleteMsg:
-		a.asyncOperationActive = false
+		a.asyncState.End()
 		a.projectState.ForceRefresh()
 		a.menuItems = a.GenerateMenu()
 		if msg.Success {
@@ -170,7 +183,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case OpenIDECompleteMsg:
-		a.asyncOperationActive = false
+		a.asyncState.End()
 		if msg.Success {
 			a.footerHint = "IDE opened successfully"
 		} else {
@@ -179,7 +192,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case OpenEditorCompleteMsg:
-		a.asyncOperationActive = false
+		a.asyncState.End()
 		if msg.Success {
 			a.footerHint = "Editor closed"
 		} else {
@@ -210,7 +223,7 @@ func (a *Application) View() string {
 	headerInfo := ui.RenderHeaderInfo(a.sizing, a.theme, headerState)
 	headerText := ui.RenderHeader(a.sizing, a.theme, headerInfo)
 
-	footerText := a.footerHint
+	footerText := ui.RenderFooter(a.footerHint, a.theme, a.sizing.TerminalWidth)
 
 	// Render confirmation dialog if active (TIT pattern)
 	if a.confirmDialog != nil && a.confirmDialog.Active {
@@ -465,9 +478,9 @@ func (a *Application) renderConsoleMode() string {
 		a.theme,
 		a.sizing.ContentInnerWidth,
 		a.sizing.ContentHeight,
-		a.asyncOperationActive,
+		a.asyncState.IsActive(),
 		false,
-		a.asyncOperationActive,
+		a.asyncState.IsActive(),
 	)
 }
 
@@ -652,7 +665,7 @@ func (a *Application) handleOperationKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cm
 		a.consoleState.ScrollDown()
 		return a, nil
 	case "esc":
-		if !a.asyncOperationActive {
+		if !a.asyncState.IsActive() {
 			a.mode = ModeMenu
 			a.selectedIndex = 0
 			a.menuItems = a.GenerateMenu()
@@ -666,7 +679,7 @@ func (a *Application) handleOperationKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cm
 }
 
 func (a *Application) handleCtrlC() (tea.Model, tea.Cmd) {
-	if a.asyncOperationActive {
+	if a.asyncState.IsActive() {
 		a.footerHint = FooterHints["operation_wait"]
 		return a, nil
 	}
@@ -682,195 +695,4 @@ func (a *Application) handleCtrlC() (tea.Model, tea.Cmd) {
 	return a, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
-}
-
-// startGenerateOperation begins the generate/regenerate operation
-func (a *Application) startGenerateOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncOperationActive = true
-	a.outputBuffer.Clear()
-	a.footerHint = GetFooterMessageText(MessageSetupInProgress)
-
-	return a, a.cmdGenerateProject()
-}
-
-// cmdGenerateProject executes the generate/regenerate command
-func (a *Application) cmdGenerateProject() tea.Cmd {
-	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
-		}
-
-		generator := a.projectState.SelectedGenerator
-		config := a.projectState.Configuration
-		projectRoot := a.projectState.WorkingDirectory
-
-		// Determine if generator is multi-config
-		isMultiConfig := false
-		for _, gen := range a.projectState.AvailableGenerators {
-			if gen.Name == generator {
-				isMultiConfig = gen.IsMultiConfig
-				break
-			}
-		}
-
-		result := ops.ExecuteSetupProject(
-			projectRoot,
-			generator,
-			config,
-			isMultiConfig,
-			outputCallback,
-		)
-
-		return GenerateCompleteMsg{
-			Success: result.Success,
-			Error:   result.Error,
-		}
-	}
-}
-
-// startOpenIDEOperation opens the IDE for the selected generator
-func (a *Application) startOpenIDEOperation() (tea.Model, tea.Cmd) {
-	a.asyncOperationActive = true
-	a.outputBuffer.Clear()
-	a.footerHint = "Opening IDE..."
-
-	return a, a.cmdOpenIDE()
-}
-
-// cmdOpenIDE executes the open IDE command
-func (a *Application) cmdOpenIDE() tea.Cmd {
-	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
-		}
-
-		buildPath := a.projectState.GetBuildPath()
-		generator := a.projectState.SelectedGenerator
-
-		result := ops.ExecuteOpenIDE(generator, buildPath, outputCallback)
-
-		return OpenIDECompleteMsg{
-			Success: result.Success,
-			Error:   result.Error,
-		}
-	}
-}
-
-// startOpenEditorOperation opens the editor in the build directory
-func (a *Application) startOpenEditorOperation() (tea.Model, tea.Cmd) {
-	a.asyncOperationActive = true
-	a.outputBuffer.Clear()
-	a.footerHint = "Opening editor..."
-
-	return a, a.cmdOpenEditor()
-}
-
-// cmdOpenEditor executes the open editor command
-func (a *Application) cmdOpenEditor() tea.Cmd {
-	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
-		}
-
-		buildPath := a.projectState.GetBuildPath()
-
-		result := ops.ExecuteOpenEditor(buildPath, outputCallback)
-
-		return OpenEditorCompleteMsg{
-			Success: result.Success,
-			Error:   result.Error,
-		}
-	}
-}
-
-// startBuildOperation begins the build operation
-func (a *Application) startBuildOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncOperationActive = true
-	a.outputBuffer.Clear()
-	a.footerHint = GetFooterMessageText(MessageBuildInProgress)
-
-	return a, a.cmdBuildProject()
-}
-
-// cmdBuildProject executes the build command
-func (a *Application) cmdBuildProject() tea.Cmd {
-	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
-		}
-
-		generator := a.projectState.SelectedGenerator
-		config := a.projectState.Configuration
-		projectRoot := a.projectState.WorkingDirectory
-
-		// Determine if generator is multi-config
-		isMultiConfig := false
-		for _, gen := range a.projectState.AvailableGenerators {
-			if gen.Name == generator {
-				isMultiConfig = gen.IsMultiConfig
-				break
-			}
-		}
-
-		result := ops.ExecuteBuildProject(
-			generator,
-			config,
-			projectRoot,
-			isMultiConfig,
-			outputCallback,
-		)
-
-		return BuildCompleteMsg{
-			Success:  result.Success,
-			ExitCode: result.ExitCode,
-			Error:    result.Error,
-		}
-	}
-}
-
-// startCleanOperation begins the clean operation
-func (a *Application) startCleanOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncOperationActive = true
-	a.outputBuffer.Clear()
-	a.footerHint = GetFooterMessageText(MessageCleanInProgress)
-
-	return a, a.cmdCleanProject()
-}
-
-// cmdCleanProject executes the clean command
-func (a *Application) cmdCleanProject() tea.Cmd {
-	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
-		}
-
-		generator := a.projectState.SelectedGenerator
-		config := a.projectState.Configuration
-		projectRoot := a.projectState.WorkingDirectory
-
-		// Determine if generator is multi-config
-		isMultiConfig := false
-		for _, gen := range a.projectState.AvailableGenerators {
-			if gen.Name == generator {
-				isMultiConfig = gen.IsMultiConfig
-				break
-			}
-		}
-
-		result := ops.ExecuteCleanProject(
-			generator,
-			config,
-			projectRoot,
-			isMultiConfig,
-			outputCallback,
-		)
-
-		return CleanCompleteMsg{
-			Success: result.Success,
-			Error:   result.Error,
-		}
-	}
 }
