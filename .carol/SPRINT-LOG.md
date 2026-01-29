@@ -160,6 +160,88 @@ JOURNALIST: OpenCode (zai-coding-plan/glm-4.7)
 
 ## SPRINT HISTORY
 
+## Sprint 8 - Menu Navigation, Layout, and Indexing Fixes
+**Date:** 2026-01-29
+**Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - MiniMax-M2.1)
+
+### Summary
+Fixed comprehensive menu issues through 5 iterations: navigation with hidden items, separator handling, Unix Makefiles removal, Generate/Regenerate state, layout improvements (value width, generator display, spacing), and critical indexing bug. Menu now uses visible selectable indices (0-4 or 0-5), separator is visible but not selectable, and menu always renders exactly 7 lines regardless of visibility.
+
+### Tasks Completed
+- **ENGINEER**: Menu Navigation Fix - Rewrote GetVisibleRows(), added GetVisibleIndex() and GetArrayIndex(), updated navigation to use visible indices, fixed separator width to match menu content
+- **ENGINEER**: Menu Fixes - Removed Unix Makefiles from all locations, added IsSelectable field to MenuRow, implemented "Ninja Multi" display truncation
+- **ENGINEER**: Menu Layout Fixes - Pass all menu items to RenderCakeMenu, implemented Generate vs Regenerate label switching, widened value column to 12 chars, changed "Ninja Multi" to "Ninja (multi)", added space between label and value when selected
+- **ENGINEER**: Critical Menu Fixes - Regenerate menu after generator/configuration changes, widened value column to 14 chars, added space between label and value, removed old padding logic
+- **ENGINEER**: Menu Stability Fixes - Fixed label padding calculation (reduce by 1 when selected and has value), render hidden rows as empty lines to maintain fixed 7-line height
+- **ENGINEER**: Urgent Menu Indexing Fix - Complete rewrite of RenderCakeMenu indexing: renamed visibleIndex to visibleSelectableIndex, only increment for visible AND selectable rows, separator never increments, hidden rows don't increment, removed padding manipulation logic
+
+### Files Modified
+- `internal/app/app.go` — Rewrote GetVisibleRows() to filter hidden rows, added GetVisibleIndex() and GetArrayIndex() methods, updated ToggleRowAtIndex() to work with visible indices, updated handleMenuKeyPress() navigation (↑↓), updated shortcut handlers (g, o, b, c) to use visible indices, added menu regeneration after generator/configuration changes, pass a.menuItems to RenderCakeMenu instead of visibleRows
+- `internal/app/footer.go` — Updated getMenuFooter() to use visible rows correctly
+- `internal/ui/menu.go` — Fixed separator width (contentWidth → menuBoxWidth), added IsSelectable field to MenuRow struct, set separator IsSelectable=false, updated GenerateMenuRows() with hasBuild parameter for Generate/Regenerate switching, increased valueColWidth from 10→12→14, added space between label and value when selected, fixed label padding calculation (reduce by 1 when selected), render hidden rows as empty lines, complete rewrite of RenderCakeMenu indexing logic (visibleSelectableIndex, only increment for visible+selectable)
+- `internal/app/menu.go` — Pass hasBuild parameter to GenerateMenuRows, update to use GetGeneratorLabel()
+- `internal/state/project.go` — Removed Unix Makefiles fallback (lines 137-142), updated GetGeneratorLabel() with truncation: "Ninja Multi-Config" → "Ninja (multi)", "Visual Studio 17 2022" → "VS 2022", "Visual Studio 16 2019" → "VS 2019"
+- `internal/utils/generator.go` — Removed Unix Makefiles from validGenerators list, removed switch case for Unix Makefiles
+- `internal/utils/platform.go` — Removed Unix Makefiles from Linux/default returns
+- `internal/ops/build.go` — Updated comments to remove Makefiles references
+- `internal/ops/clean.go` — Updated comments to remove Makefiles references
+- `SPEC.md` — Updated generator documentation (5 locations)
+
+### Notes
+- Build completes successfully ✓
+- Navigation now uses visible selectable indices (0-4 or 0-5 depending on visible items)
+- Separator is visible but not selectable (skipped in navigation, always at line 3)
+- Unix Makefiles completely removed from generator cycling
+- Generator cycling: Xcode → Ninja → Ninja Multi-Config → Xcode (macOS)
+- Generate vs Regenerate label switches based on build state (fresh project = "Generate", after build = "Regenerate")
+- Value column 14 chars wide (fits "Ninja (multi)" = 13 chars)
+- "Ninja (multi)" displays correctly in value column
+- Space appears between label and value when selected via reduced padding, not added space
+- Menu always renders exactly 7 lines (hidden items as empty lines)
+- Menu position stable when items hide/show (no shifting)
+- Footer shows correct hint for selected item
+- Can navigate to Clean when visible (navigation not capped at Build)
+- Value column stays aligned regardless of selection
+- Menu regenerates immediately after generator or configuration changes
+
+## Sprint 7 - TIT Footer Alignment and Unix Makefiles Removal
+**Date:** 2026-01-28
+**Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - MiniMax-M2.1)
+
+### Summary
+Implemented complete footer system aligning CAKE with TIT's exact architecture. Replaced scattered footerHint management with structured footer manager (internal/app/footer.go), implemented mode-specific footer content (menu hints vs console scroll status), and removed Unix Makefiles from generator options across entire codebase.
+
+### Tasks Completed
+- **COUNSELOR**: TIT Footer Alignment Planning - Designed 7-phase implementation plan to align footer with TIT structure, defined menu hints and console scroll status patterns
+- **ENGINEER**: Unix Makefiles Removal - Removed Unix Makefiles from generator options across 6 files (project.go, generator.go, platform.go, build.go, clean.go, SPEC.md)
+- **ENGINEER**: TIT Footer Implementation (Phases 2-7) - Complete rewrite of internal/ui/footer.go with FooterShortcut struct and renderers, created internal/app/footer.go manager with getMenuFooter()/getConsoleFooter(), added FooterHintShortcuts map to messages.go, added Hint field to MenuRow, removed 50+ lines of manual footerHint management from app.go and operation files
+
+### Files Modified
+- `internal/ui/footer.go` — Complete rewrite: FooterShortcut struct, FooterStyles, RenderFooter(), RenderFooterOverride(), RenderFooterHint()
+- `internal/app/footer.go` — NEW: Footer manager with GetFooterContent(), getMenuFooter(), getConsoleFooter(), computeConsoleScrollStatus()
+- `internal/app/messages.go` — Added FooterHintShortcuts map with mode-specific shortcuts
+- `internal/ui/menu.go` — Added Hint field to MenuRow struct, populated all 7 rows with descriptions
+- `internal/app/app.go` — Removed footerHint field, updated View() to use GetFooterContent(), removed 20+ footerHint assignments
+- `internal/app/init.go` — Removed footerHint initialization
+- `internal/app/op_generate.go` — Removed footerHint assignment
+- `internal/app/op_build.go` — Removed footerHint assignment
+- `internal/app/op_clean.go` — Removed footerHint assignment
+- `internal/app/op_open.go` — Removed 2 footerHint assignments
+- `internal/state/project.go` — Removed Unix Makefiles fallback
+- `internal/utils/generator.go` — Removed "Unix Makefiles" from validGenerators
+- `internal/utils/platform.go` — Removed "Unix Makefiles" from Linux/default returns
+- `internal/ops/build.go` — Updated comments to remove Makefiles reference
+- `internal/ops/clean.go` — Updated comments to remove Makefiles reference
+- `SPEC.md` — Updated generator documentation (5 locations)
+
+### Notes
+- Build completes successfully ✓
+- Footer now shows menu item hints in menu mode (from MenuRow.Hint field)
+- Footer shows scroll shortcuts + status in console mode (left/right split layout)
+- Ctrl+C timeout works as global override in both modes
+- Unix Makefiles no longer appears in generator cycling
+- All operation files cleaned up - no more manual footerHint management
+
 ## Sprint 6 - TIT Compliance Refactoring Complete
 **Date:** 2026-01-28
 **Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - glm-4.7), AUDITOR (OpenCode - glm-4.7)
