@@ -2,6 +2,7 @@ package ops
 
 import (
 	"cake/internal/ui"
+	"cake/internal/utils"
 	"os"
 	"path/filepath"
 )
@@ -12,7 +13,7 @@ type CleanResult struct {
 }
 
 func ExecuteCleanProject(generator, config, projectRoot string, outputCallback func(string, ui.OutputLineType)) CleanResult {
-	buildDir := filepath.Join(projectRoot, "Builds", generator)
+	buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(generator))
 
 	outputCallback("Cleaning...", ui.TypeInfo)
 

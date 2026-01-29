@@ -11,7 +11,7 @@ func GetPlatformGenerators() []string {
 	case "darwin":
 		return []string{"Xcode", "Ninja"}
 	case "windows":
-		return []string{"Visual Studio", "Ninja Multi-Config"}
+		return []string{"Visual Studio 18 2026", "Visual Studio 17 2022", "Ninja"}
 	case "linux":
 		return []string{"Ninja"}
 	default:
@@ -24,7 +24,7 @@ func GetDefaultGenerator() string {
 	case "darwin":
 		return "Xcode"
 	case "windows":
-		return "Visual Studio"
+		return "Visual Studio 18 2026"
 	default:
 		return "Ninja"
 	}

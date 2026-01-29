@@ -2,6 +2,7 @@ package ops
 
 import (
 	"cake/internal/ui"
+	"cake/internal/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,7 +16,7 @@ type OpenResult struct {
 
 // ExecuteOpenIDE opens the IDE project for the given build directory
 func ExecuteOpenIDE(generator, config, projectRoot string, outputCallback func(string, ui.OutputLineType)) OpenResult {
-	buildDir := filepath.Join(projectRoot, "Builds", generator)
+	buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(generator))
 
 	var projectFile string
 
@@ -32,7 +33,7 @@ func ExecuteOpenIDE(generator, config, projectRoot string, outputCallback func(s
 		}
 		return OpenResult{Success: true}
 
-	case "Visual Studio 17 2022", "Visual Studio 16 2019":
+	case "Visual Studio 18 2026", "Visual Studio 17 2022":
 		projectFile = findVisualStudioSolution(buildDir)
 		if projectFile == "" {
 			return OpenResult{Success: false, Error: "No Visual Studio solution found"}

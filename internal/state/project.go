@@ -1,6 +1,7 @@
 package state
 
 import (
+	"cake/internal/utils"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 
 // Generator represents a CMake generator with metadata
 type Generator struct {
-	Name  string // "Xcode", "Ninja", "Visual Studio 17 2022", etc.
+	Name  string // CMake generator name: "Xcode", "Ninja", "Visual Studio 18 2026", "Visual Studio 17 2022"
 	IsIDE bool   // true for Xcode, VS; false for Ninja, Makefiles
 }
 
@@ -123,11 +124,6 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 			Name:  "Ninja",
 			IsIDE: false,
 		})
-		// Ninja Multi-Config is also available if Ninja is
-		ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-			Name:  "Ninja Multi-Config",
-			IsIDE: false,
-		})
 	}
 
 	// Check Visual Studio (Windows only)
@@ -135,11 +131,11 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 		// Check for Visual Studio via vswhere or cmake generator availability
 		if ps.checkVSGeneratorAvailable() {
 			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-				Name:  "Visual Studio 17 2022",
+				Name:  "Visual Studio 18 2026",
 				IsIDE: true,
 			})
 			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-				Name:  "Visual Studio 16 2019",
+				Name:  "Visual Studio 17 2022",
 				IsIDE: true,
 			})
 		}
@@ -228,14 +224,14 @@ func (ps *ProjectState) GetBuildPath() string {
 	}
 
 	gen := ps.SelectedGenerator
-	// All projects are multi-config: Builds/<Generator>/
-	return filepath.Join(ps.WorkingDirectory, "Builds", gen)
+	// All projects are multi-config: Builds/<dir>/
+	return filepath.Join(ps.WorkingDirectory, "Builds", utils.GetDirectoryName(gen))
 }
 
 // GetBuildDirectory returns the build directory path for given generator and config
 func (ps *ProjectState) GetBuildDirectory(generatorName string, config string) string {
-	// All projects are multi-config: Builds/<Generator>/
-	return filepath.Join(ps.WorkingDirectory, "Builds", generatorName)
+	// All projects are multi-config: Builds/<dir>/
+	return filepath.Join(ps.WorkingDirectory, "Builds", utils.GetDirectoryName(generatorName))
 }
 
 // scanBuildDirectories scans for existing build directories
@@ -254,11 +250,11 @@ func (ps *ProjectState) scanBuildDirectories(rootDir string) {
 			continue
 		}
 
-		generatorName := entry.Name()
-		buildPath := filepath.Join(buildsDir, generatorName)
+		dirName := entry.Name()
+		buildPath := filepath.Join(buildsDir, dirName)
 
 		buildInfo := BuildInfo{
-			Generator: generatorName,
+			Generator: utils.GetGeneratorNameFromDirectory(dirName),
 			Path:      buildPath,
 			Exists:    true,
 		}
@@ -272,7 +268,7 @@ func (ps *ProjectState) scanBuildDirectories(rootDir string) {
 			buildInfo.Configs = ps.detectConfigurations(buildPath)
 		}
 
-		ps.Builds[generatorName] = buildInfo
+		ps.Builds[utils.GetGeneratorNameFromDirectory(dirName)] = buildInfo
 	}
 }
 
@@ -341,12 +337,10 @@ func (ps *ProjectState) GetProjectLabel() string {
 
 	// Truncate long names for display
 	switch name {
-	case "Ninja Multi-Config":
-		return "Ninja (multi)"
+	case "Visual Studio 18 2026":
+		return "VS 2026"
 	case "Visual Studio 17 2022":
 		return "VS 2022"
-	case "Visual Studio 16 2019":
-		return "VS 2019"
 	default:
 		return name
 	}

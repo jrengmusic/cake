@@ -7,6 +7,7 @@ import (
 
 	"cake/internal/ops"
 	"cake/internal/ui"
+	"cake/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -32,7 +33,7 @@ func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 
 		project := a.projectState.SelectedGenerator
 		projectRoot := a.projectState.WorkingDirectory
-		buildDir := filepath.Join(projectRoot, "Builds", project)
+		buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(project))
 
 		// Step 1: Clean
 		outputCallback("=== Step 1: Clean ===", ui.TypeInfo)
