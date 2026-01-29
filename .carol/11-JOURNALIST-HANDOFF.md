@@ -77,24 +77,32 @@
 **Key Changes:**
 - Full LIFESTAR compliance audit completed
 - Identified 3 CRITICAL, 4 HIGH, 5 MEDIUM, 3 LOW issues
-- `generators.go` created with constants and helpers
+- `generators.go` created with constants and helpers (GetDirectoryName, GetGeneratorNameFromDirectory, IsGeneratorIDE)
 - `stream.go` created with StreamCommand() helper
-- "Ninja Multi-Config" removal planned (partially implemented)
-- VS directory mapping planned: `VS2026/`, `VS2022/`
+- "Ninja Multi-Config" removed from all locations
+- VS directory mapping implemented: `VS2026/`, `VS2022/`
+- All 7 build path constructions updated to use GetDirectoryName()
 
 **Status:** 
 - Audit: ✅ Complete
-- Code cleanup: ⚠️ Partially complete (MACHINIST summary doesn't match codebase)
+- Code cleanup: ✅ Complete (all 6 FIX items verified)
 - Doc updates: ❌ Pending
 
-**Files Created:**
-- `internal/utils/generators.go` — Generator constants, GetDirectoryName(), IsGeneratorIDE()
-- `internal/utils/stream.go` — StreamCommand() helper
+**Files Created/Modified:**
+- `internal/utils/generators.go` — NEW: Generator constants, GetDirectoryName(), GetGeneratorNameFromDirectory(), IsGeneratorIDE()
+- `internal/utils/stream.go` — NEW: StreamCommand() helper
+- `internal/utils/generator.go` — Updated validGenerators and switch cases
+- `internal/utils/platform.go` — Updated platform generators
+- `internal/state/project.go` — Removed NinjaMulti, updated VS names, integrated GetDirectoryName()
+- `internal/ops/setup.go` — Integrated GetDirectoryName() and StreamCommand()
+- `internal/ops/build.go` — Integrated GetDirectoryName() and StreamCommand()
+- `internal/ops/clean.go` — Integrated GetDirectoryName()
+- `internal/ops/open.go` — Integrated GetDirectoryName(), updated VS switch cases
+- `internal/app/op_regenerate.go` — Integrated GetDirectoryName()
 
 **Remaining Work:**
-- Remove "Ninja Multi-Config" from project.go, generator.go, platform.go
-- Update build path constructions to use GetDirectoryName()
-- Update SPEC.md and ARCHITECTURE.md
+- Update SPEC.md (remove Unix Makefiles, update VS names, update build paths)
+- Update ARCHITECTURE.md (remove single-config references, add new utils files)
 
 ---
 
