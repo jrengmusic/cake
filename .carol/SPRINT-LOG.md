@@ -160,6 +160,88 @@ JOURNALIST: OpenCode (zai-coding-plan/glm-4.7)
 
 ## SPRINT HISTORY
 
+## Sprint 11 - Codebase Audit and Cleanup
+**Date:** 2026-01-29
+**Agents:** AUDITOR (Amp - Claude Sonnet 4), MACHINIST (OpenCode - glm-4.7)
+
+### Summary
+Full codebase audit identified 15 issues (3 CRITICAL, 4 HIGH, 5 MEDIUM, 3 LOW). Fixed all CRITICAL and HIGH priority issues: removed dead "Ninja Multi-Config" logic, implemented CMake name approach with directory mapping, extracted command streaming helper, eliminated code duplication in menu handlers, and achieved SSOT for all generator references.
+
+### Tasks Completed
+- **AUDITOR**: Codebase Audit - Full audit revealing 15 issues: SSOT violations (build paths, streaming), code duplication (menu handlers, command streaming), dead code (Ninja Multi-Config), inconsistent generator naming, missing unit tests, god object tendency
+- **MACHINIST**: Cleanup (6 FIX items) - Removed "Ninja Multi-Config" from all locations, updated Visual Studio versions to CMake names (VS2026, VS2022), added GetDirectoryName() and GetGeneratorNameFromDirectory() helpers, updated all 7 build path constructions to use GetDirectoryName()
+- **MACHINIST**: Code Polish (3 CRITICAL + 1 HIGH) - Created StreamCommand() helper (removed 120+ lines duplication), created executeShortcut() helper (eliminated handler duplication), created generator name constants (SSOT in utils/generators.go)
+
+### Files Modified
+- `internal/utils/generators.go` - NEW: Generator name constants (SSOT), GetDirectoryName(), GetGeneratorNameFromDirectory(), IsGeneratorIDE()
+- `internal/utils/stream.go` - NEW: StreamCommand() helper for unified command streaming
+- `internal/utils/generator.go` - Updated validGenerators slice and switch cases, removed Ninja Multi-Config
+- `internal/utils/platform.go` - Updated GetPlatformGenerators() and GetDefaultGenerator(), changed Windows default from Ninja Multi-Config to Ninja
+- `internal/state/project.go` - Updated VS names to CMake format, removed NinjaMulti, integrated GetDirectoryName()
+- `internal/ops/setup.go` - Updated buildDir to use GetDirectoryName(), refactored to use StreamCommand()
+- `internal/ops/build.go` - Updated buildDir to use GetDirectoryName(), refactored to use StreamCommand()
+- `internal/ops/clean.go` - Updated buildDir to use GetDirectoryName()
+- `internal/ops/open.go` - Updated VS switch cases and buildDir to use GetDirectoryName()
+- `internal/app/op_regenerate.go` - Updated buildDir to use GetDirectoryName()
+- `internal/app/app.go` - Added executeShortcut() helper
+
+### Notes
+- Build completes successfully ✓
+- All grep verifications pass
+- All 6 FIX items verified complete
+- Removed 120+ lines of duplicated code
+- SSOT achieved: generator names in utils/generators.go, directory names via GetDirectoryName()
+- All generators (Xcode, Ninja, VS2022, VS2019) are multi-config
+- CMake-style generator names: "Visual Studio 18 2026", "Visual Studio 17 2022"
+- Directory names: "VS2026", "VS2022"
+- Documentation updates pending: SPEC.md and ARCHITECTURE.md require updates to remove Unix Makefiles and single-config references
+
+## Sprint 10 - Console TIT Alignment
+**Date:** 2026-01-29
+**Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - MiniMax-M2.1, glm-4.7), SURGEON (OpenCode - glm-4.6)
+
+### Summary
+Achieved 100% visual and behavioral parity between Cake Console and TIT Console. Fixed critical menu index bug causing wrong operations, implemented real-time streaming output with color-coded types, added process cancellation via ESC, created confirmation dialogs for destructive operations, and replaced entire theme system with TIT's exact implementation.
+
+### Tasks Completed
+- **COUNSELOR**: Console TIT Alignment Kickoff - Comprehensive 11-task plan for console alignment, identified critical issues (menu Generator label, index calculation bug, IsMultiConfig removal, console flooding, operation completion issues)
+- **COUNSELOR**: Critical Bug Fix - Fixed menu index mismatch: GetArrayIndex/GetVisibleIndex only checked Visible, not IsSelectable, causing Clean to trigger Build operation
+- **COUNSELOR**: Console Bugs - Identified 3 critical bugs: ESC doesn't work during operations (no process kill), console flooded with lines (9k+), operations never complete (goroutine leaks)
+- **ENGINEER**: Console TIT Alignment (Tasks 1-5) - Updated menu labels (Generator→Project), fixed GetVisibleIndex/GetArrayIndex to check both Visible and IsSelectable, removed IsMultiConfig field and methods, renamed GetGeneratorLabel→GetProjectLabel
+- **ENGINEER**: Console TIT Alignment Updated (Tasks 6-10) - Fixed output color types (Info/cyan, Stdout/gray, Stderr/coral/red, Status/cyan, Warning/orange), implemented real-time streaming via StdoutPipe/StderrPipe+bufio.Scanner, simplified Clean to fast rm -rf, created op_regenerate.go with Clean→Generate sequence, added confirmation dialogs for clean/regenerate
+- **SURGEON**: Console TIT Alignment - Complete console system overhaul: process cancellation (ESC calls cancelContext), console auto-scroll (every 100ms), confirmation dialog key routing fix (arrow keys: left→Yes, right→No), removed console centering, copied complete TIT theme system (5 themes), added OutputRefreshMsg for console refresh ticks
+
+### Files Modified
+- `internal/ui/console.go` - Copied from TIT, removed blank line after OUTPUT title, left-aligned wrapped lines
+- `internal/ui/theme.go` - Complete TIT theme system (5 themes: gfx, spring, summer, autumn, winter), config path to `.config/cake`
+- `internal/ui/buffer.go` - Verified identical to TIT
+- `internal/ui/menu.go` - Changed ID from "generator" to "project", updated labels
+- `internal/state/project.go` - Removed IsMultiConfig field and methods, renamed GetGeneratorLabel→GetProjectLabel
+- `internal/ops/setup.go` - Complete rewrite with context support, uses exec.CommandContext for cancellable processes, streams stdout/stderr in real-time via goroutines, changed callback signature to include lineType
+- `internal/ops/build.go` - Changed callback signature, added real-time streaming, removed isMultiConfig
+- `internal/ops/clean.go` - Simplified to rm -rf, added config parameter, updated messages
+- `internal/ops/open.go` - Added config and projectRoot parameters, changed callback signature
+- `internal/app/op_generate.go` - Updated callback, removed isMultiConfig usage, added context creation for cancellation
+- `internal/app/op_build.go` - Updated callback, removed isMultiConfig usage, added consoleAutoScroll = true on operation start
+- `internal/app/op_clean.go` - Updated callback, added consoleAutoScroll = true on operation start
+- `internal/app/op_open.go` - Updated callback
+- `internal/app/op_regenerate.go` - NEW FILE with Clean then Generate sequence, context creation for cancellation
+- `internal/app/messages.go` - Added RegenerateCompleteMsg, OutputRefreshMsg
+- `internal/app/menu.go` - Updated to use GetProjectLabel()
+- `internal/app/app.go` - Added consoleAutoScroll field, added runningCmd and cancelContext for process cancellation, fixed confirmation dialog key routing (check BEFORE key dispatcher), fixed arrow key mapping (left→Yes, right→No), added spacebar support, ctrl+c handling, fixed "g" shortcut to use "regenerate" row ID, console mode bypasses RenderReactiveLayout to avoid centering, updated all completion handlers to check for abort, ESC handler prints abort message to console, added confirmation dialogs for clean/regenerate
+
+### Notes
+- Build completes successfully ✓
+- Menu index bug fixed: Clean now triggers Clean, not Build
+- Real-time streaming: Output appears line-by-line as generated
+- Color-coded output: Info/cyan, Stdout/gray, Stderr/coral/red, Status/cyan, Warning/orange
+- Auto-scroll: Enabled during operations, disabled when user scrolls manually, re-enabled by new operations
+- Process cancellation: ESC kills cmake process, prints abort message, shows "Press ESC to return to menu"
+- Confirmation dialogs: Clean and Regenerate default to "No", arrow keys fixed (left→Yes, right→No), Y always confirms, N always cancels, ESC always cancels
+- Console bypasses RenderReactiveLayout (was centering), renders full-screen with internal OUTPUT title
+- Theme system: 5 themes generated in `~/.config/cake/themes/` (gfx, spring, summer, autumn, winter)
+- IsMultiConfig removed: All projects now use multi-config path structure
+
 ## Sprint 8 - Menu Navigation, Layout, and Indexing Fixes
 **Date:** 2026-01-29
 **Agents:** COUNSELOR (OpenCode - glm-4.7), ENGINEER (OpenCode - MiniMax-M2.1)

@@ -23,7 +23,7 @@
 2. **Dynamic Visibility**: Menu items appear/disappear based on build state and generator capabilities
 3. **System Tool Detection**: Available generators determined by installed tools, not disk scanning
 4. **50/50 Split Layout**: Menu on left half, ASCII banner on right half, both centered
-5. **Build Path Convention**: Strict `Builds/<Generator>/<Config?>` structure (multi-config vs single-config)
+5. **Build Path Convention**: Strict `Builds/<Generator>/` structure (all generators multi-config)
 6. **Persistent Configuration**: Settings saved to `~/.config/cake/config.toml`
 
 ## State Model
@@ -32,21 +32,17 @@
 ```
 State determined by: (WorkingDirectory, AvailableGenerators, BuildDirectories)
 - WorkingDirectory: Current directory containing CMakeLists.txt
-- AvailableGenerators: System tools detected (Xcode, Ninja, Unix Makefiles, Visual Studio)
+- AvailableGenerators: System tools detected (Xcode, Ninja, Visual Studio)
 - BuildDirectories: Scanned `Builds/` subdirectories matching generator pattern
 ```
 
 ### Generator Types
 ```
-Multi-Config Generators (build contains all configurations):
+All Generators (multi-config, build contains all configurations):
 - Xcode (macOS only, IDE)
+- Ninja (cross-platform, CLI)
 - Visual Studio (Windows only, IDE)
 Path: Builds/<Generator>/
-
-Single-Config Generators (separate build per configuration):
-- Ninja (cross-platform, CLI)
-- Unix Makefiles (always available, CLI)  
-Path: Builds/<Generator>/<Configuration>/
 ```
 
 ### Menu Item Visibility Rules
@@ -125,13 +121,13 @@ Project directory:
 4. Display updates immediately with new generator name
 
 **Available Generators Detection:**
-- macOS: Xcode (if xcodebuild exists), Ninja (if ninja exists), Unix Makefiles (always)
-- Linux: Ninja (if ninja exists), Unix Makefiles (always)
-- Windows: Visual Studio (if vswhere.exe exists), Ninja (if ninja exists), Unix Makefiles (always)
+- macOS: Xcode (if xcodebuild exists), Ninja (if ninja exists)
+- Linux: Ninja (if ninja exists)
+- Windows: Visual Studio (if vswhere.exe exists), Ninja (if ninja exists)
 
 **Cycle Order:**
 ```
-Xcode → Ninja → Unix Makefiles → Xcode (loop)
+Xcode → Ninja → Xcode (loop)
 ```
 
 #### Error Handling
@@ -163,12 +159,7 @@ Xcode → Ninja → Unix Makefiles → Xcode (loop)
 5. Output streams in real-time
 6. On completion, returns to menu with status message
 
-**CMake Command (Single-Config):**
-```bash
-cmake -S . -B Builds/Ninja/Debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
-```
-
-**CMake Command (Multi-Config):**
+**CMake Command:**
 ```bash
 cmake -S . -B Builds/Xcode -G Xcode
 ```
@@ -216,12 +207,7 @@ Setting up CMake... (ESC to abort)
 5. Compiler output streams in real-time
 6. On completion, returns to menu with status message
 
-**Build Command (Single-Config):**
-```bash
-cmake --build Builds/Ninja/Debug
-```
-
-**Build Command (Multi-Config):**
+**Build Command:**
 ```bash
 cmake --build Builds/Xcode --config Debug
 ```
@@ -252,7 +238,7 @@ cmake --build Builds/Xcode --config Debug
 
 **Clean Command:**
 ```bash
-rm -rf Builds/<Generator>/<Config?>
+rm -rf Builds/<Generator>
 ```
 
 **Success Message:** "Operation completed. Press ESC to return."
@@ -272,10 +258,10 @@ open Builds/Xcode/*.xcodeproj
 
 **Visual Studio Command:**
 ```bash
-start Builds/VisualStudio/*.sln
+start Builds/VS2026/*.sln
 ```
 
-#### Editor Flow (Ninja, Makefiles)
+#### Editor Flow (Ninja)
 1. User selects "Open Editor" row (only for CLI generators)
 2. User presses Enter
 3. System launches Neovim in build directory
@@ -284,7 +270,7 @@ start Builds/VisualStudio/*.sln
 
 **Neovim Command:**
 ```bash
-nvim Builds/<Generator>/<Config>/
+nvim Builds/<Generator>/
 ```
 
 ### Feature: Preferences Screen

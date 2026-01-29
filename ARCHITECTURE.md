@@ -48,11 +48,13 @@ cake/
 │   │   ├── build.go         # CMake build commands
 │   │   ├── clean.go         # Clean build directories
 │   │   └── open.go          # Open IDE/editor
-│   └── utils/               # Utility functions
-│       ├── generator.go      # Generator detection
-│       ├── platform.go       # Platform detection
-│       ├── project.go        # Project utilities
-│       └── exec.go          # Command execution
+ │   └── utils/               # Utility functions
+ │       ├── generators.go    # Generator constants, GetDirectoryName()
+ │       ├── stream.go        # StreamCommand() helper
+ │       ├── generator.go      # Generator detection
+ │       ├── platform.go       # Platform detection
+ │       ├── project.go        # Project utilities
+ │       └── exec.go          # Command execution
 └── internal/banner/
     ├── svg.go               # SVG banner rendering
     └── braille.go           # Braille banner rendering
@@ -483,38 +485,48 @@ func (as *AsyncState) CanExit() bool
 
 ### Pattern 6: Layered Build Path Logic
 
-**Used for:** Generating correct build paths for multi-config vs single-config generators
+**Used for:** Generating correct build paths using SSOT constants and directory mapping
 
-**Implementation location:** `internal/state/project.go`
+**Implementation location:** `internal/utils/generators.go`, `internal/state/project.go`
 
 **Structure:**
 ```go
-func (ps *ProjectState) IsGeneratorMultiConfig(generator string) bool {
-    // Multi-config: Xcode, Visual Studio
-    // Single-config: Ninja, Unix Makefiles
-    for _, g := range ps.AvailableGenerators {
-        if g.Name == generator {
-            return g.IsMultiConfig
-        }
+// In utils/generators.go:
+const (
+    GeneratorXcode      = "Xcode"
+    GeneratorNinja      = "Ninja"
+    GeneratorVS2026     = "Visual Studio 18 2026"
+    GeneratorVS2022     = "Visual Studio 17 2022"
+)
+
+func GetDirectoryName(generator string) string {
+    // Maps generator names to directory names
+    switch generator {
+    case GeneratorXcode:
+        return "Xcode"
+    case GeneratorNinja:
+        return "Ninja"
+    case GeneratorVS2026:
+        return "VS2026"
+    case GeneratorVS2022:
+        return "VS2022"
+    default:
+        return "Build"
     }
-    return false
 }
 
+// In state/project.go:
 func (ps *ProjectState) GetBuildPath() string {
     buildDir := filepath.Join(ps.WorkingDirectory, "Builds")
-    if ps.IsGeneratorMultiConfig(ps.SelectedGenerator) {
-        // Multi-config: Builds/Xcode/
-        return filepath.Join(buildDir, ps.SelectedGenerator)
-    }
-    // Single-config: Builds/Ninja/Debug/
-    return filepath.Join(buildDir, ps.SelectedGenerator, ps.Configuration)
+    return filepath.Join(buildDir, GetDirectoryName(ps.SelectedGenerator))
 }
 ```
 
 **Key Insight:**
 - Single source of truth for build path logic
 - Eliminates code duplication (removed 5+ duplicate build path constructions in Sprint 6)
-- Encapsulates multi-config vs single-config decision
+- All generators use multi-config structure (Builds/<Generator>/)
+- CMake names in constants, shortened directory names via GetDirectoryName()
 
 ---
 
