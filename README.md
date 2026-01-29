@@ -118,7 +118,7 @@ MIT — Use it, break it, fix it, ship it.
 ---
 
 <div align="center">
-  <img src="internal/banner/assets/cake-logo.svg" alt="CAKE Logo" width="128" height="128">
+  <img src="internal/ui/assets/cake-logo.svg" alt="CAKE Logo" width="128" height="128">
 </div>
 
 **CAKE: a piece of cake. Because CMake shouldn't be hard.**
