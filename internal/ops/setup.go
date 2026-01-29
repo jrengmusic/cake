@@ -1,6 +1,9 @@
 package ops
 
 import (
+	"bufio"
+	"cake/internal/ui"
+	"context"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -11,7 +14,7 @@ type SetupResult struct {
 	Error   string
 }
 
-func ExecuteSetupProject(workingDir, generator, config string, isMultiConfig bool, outputCallback func(string)) SetupResult {
+func ExecuteSetupProject(ctx context.Context, workingDir, generator, config string, outputCallback func(string, ui.OutputLineType)) SetupResult {
 	if workingDir == "" {
 		return SetupResult{Success: false, Error: "Working directory is empty"}
 	}
@@ -20,12 +23,7 @@ func ExecuteSetupProject(workingDir, generator, config string, isMultiConfig boo
 		return SetupResult{Success: false, Error: "Generator is empty"}
 	}
 
-	var buildDir string
-	if isMultiConfig {
-		buildDir = filepath.Join(workingDir, "Builds", generator)
-	} else {
-		buildDir = filepath.Join(workingDir, "Builds", generator, config)
-	}
+	buildDir := filepath.Join(workingDir, "Builds", generator)
 
 	args := []string{
 		"-G", generator,
@@ -33,32 +31,69 @@ func ExecuteSetupProject(workingDir, generator, config string, isMultiConfig boo
 		"-B", buildDir,
 	}
 
-	// Add CMAKE_BUILD_TYPE for single-config generators
-	if !isMultiConfig && config != "" {
-		args = append(args, "-DCMAKE_BUILD_TYPE="+config)
-	}
+	outputCallback("Running: cmake "+strings.Join(args, " "), ui.TypeInfo)
+	outputCallback("", ui.TypeStdout)
 
-	outputCallback("Running: cmake " + strings.Join(args, " "))
-	outputCallback("")
-
-	cmd := exec.Command("cmake", args...)
+	cmd := exec.CommandContext(ctx, "cmake", args...)
 	cmd.Dir = workingDir
 
-	output, err := cmd.CombinedOutput()
-
-	for _, line := range strings.Split(string(output), "\n") {
-		if line != "" {
-			outputCallback(line)
-		}
-	}
-
+	// Get stdout pipe for streaming
+	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		outputCallback("")
-		outputCallback("ERROR: " + err.Error())
+		outputCallback("ERROR: Failed to create stdout pipe", ui.TypeStderr)
 		return SetupResult{Success: false, Error: err.Error()}
 	}
 
-	outputCallback("")
-	outputCallback("Setup completed successfully: " + buildDir)
+	// Get stderr pipe for streaming
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		outputCallback("ERROR: Failed to create stderr pipe", ui.TypeStderr)
+		return SetupResult{Success: false, Error: err.Error()}
+	}
+
+	// Start command
+	if err := cmd.Start(); err != nil {
+		outputCallback("ERROR: Failed to start command", ui.TypeStderr)
+		return SetupResult{Success: false, Error: err.Error()}
+	}
+
+	// Stream stdout in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				outputCallback(line, ui.TypeStdout)
+			}
+		}
+	}()
+
+	// Stream stderr in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				outputCallback(line, ui.TypeStderr)
+			}
+		}
+	}()
+
+	// Wait for command to complete
+	err = cmd.Wait()
+
+	if ctx.Err() == context.Canceled {
+		// Message already printed by ESC handler, just return
+		return SetupResult{Success: false, Error: "aborted"}
+	}
+
+	if err != nil {
+		outputCallback("", ui.TypeStdout)
+		outputCallback("ERROR: "+err.Error(), ui.TypeStderr)
+		return SetupResult{Success: false, Error: err.Error()}
+	}
+
+	outputCallback("", ui.TypeStdout)
+	outputCallback("Setup completed successfully: "+buildDir, ui.TypeStatus)
 	return SetupResult{Success: true}
 }

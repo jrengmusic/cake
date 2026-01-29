@@ -11,28 +11,26 @@ func (a *Application) startBuildOperation() (tea.Model, tea.Cmd) {
 	a.mode = ModeConsole
 	a.asyncState.Start()
 	a.outputBuffer.Clear()
+	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
 	a.footerHint = GetFooterMessageText(MessageBuildInProgress)
-	return a, a.cmdBuildProject()
+	return a, tea.Batch(a.cmdBuildProject(), a.cmdRefreshConsole())
 }
 
 // cmdBuildProject executes the build command
 func (a *Application) cmdBuildProject() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
+		outputCallback := func(line string, lineType ui.OutputLineType) {
+			a.outputBuffer.Append(line, lineType)
 		}
 
-		generator := a.projectState.SelectedGenerator
+		project := a.projectState.SelectedGenerator
 		config := a.projectState.Configuration
 		projectRoot := a.projectState.WorkingDirectory
 
-		isMultiConfig := a.projectState.IsGeneratorMultiConfig(generator)
-
 		result := ops.ExecuteBuildProject(
-			generator,
+			project,
 			config,
 			projectRoot,
-			isMultiConfig,
 			outputCallback,
 		)
 

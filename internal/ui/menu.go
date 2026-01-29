@@ -21,18 +21,18 @@ type MenuRow struct {
 }
 
 // GenerateMenuRows returns exactly 7 rows (used by app.go)
-func GenerateMenuRows(generatorLabel string, configuration string, canOpenIDE bool, canClean bool, hasBuild bool) []MenuRow {
+func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool, canClean bool, hasBuild bool) []MenuRow {
 	return []MenuRow{
 		{
-			ID:           "generator",
+			ID:           "project",
 			Shortcut:     "",
 			Emoji:        "⚙️",
-			Label:        "Generator",
-			Value:        generatorLabel,
+			Label:        "Project",
+			Value:        projectLabel,
 			Visible:      true,
 			IsAction:     false,
 			IsSelectable: true,
-			Hint:         "Select CMake generator (Xcode, Ninja, etc.)",
+			Hint:         "Select project type (Xcode, Ninja, etc.)",
 		},
 		{
 			ID:           "regenerate",

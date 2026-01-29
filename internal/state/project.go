@@ -11,9 +11,8 @@ import (
 
 // Generator represents a CMake generator with metadata
 type Generator struct {
-	Name          string // "Xcode", "Ninja", "Visual Studio 17 2022", etc.
-	IsIDE         bool   // true for Xcode, VS; false for Ninja, Makefiles
-	IsMultiConfig bool   // true for Xcode, VS, Ninja Multi-Config; false for Ninja, Makefiles
+	Name  string // "Xcode", "Ninja", "Visual Studio 17 2022", etc.
+	IsIDE bool   // true for Xcode, VS; false for Ninja, Makefiles
 }
 
 // BuildInfo represents the state of a build directory
@@ -112,9 +111,8 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 	if runtime.GOOS == "darwin" {
 		if ps.checkCommandExists("xcodebuild") {
 			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-				Name:          "Xcode",
-				IsIDE:         true,
-				IsMultiConfig: true,
+				Name:  "Xcode",
+				IsIDE: true,
 			})
 		}
 	}
@@ -122,15 +120,13 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 	// Check Ninja (cross-platform)
 	if ps.checkCommandExists("ninja") {
 		ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-			Name:          "Ninja",
-			IsIDE:         false,
-			IsMultiConfig: false,
+			Name:  "Ninja",
+			IsIDE: false,
 		})
 		// Ninja Multi-Config is also available if Ninja is
 		ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-			Name:          "Ninja Multi-Config",
-			IsIDE:         false,
-			IsMultiConfig: true,
+			Name:  "Ninja Multi-Config",
+			IsIDE: false,
 		})
 	}
 
@@ -139,14 +135,12 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 		// Check for Visual Studio via vswhere or cmake generator availability
 		if ps.checkVSGeneratorAvailable() {
 			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-				Name:          "Visual Studio 17 2022",
-				IsIDE:         true,
-				IsMultiConfig: true,
+				Name:  "Visual Studio 17 2022",
+				IsIDE: true,
 			})
 			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
-				Name:          "Visual Studio 16 2019",
-				IsIDE:         true,
-				IsMultiConfig: true,
+				Name:  "Visual Studio 16 2019",
+				IsIDE: true,
 			})
 		}
 	}
@@ -234,41 +228,14 @@ func (ps *ProjectState) GetBuildPath() string {
 	}
 
 	gen := ps.SelectedGenerator
-	// For multi-config generators (Xcode, VS), path is Builds/<Generator>/
-	// For single-config generators (Ninja, Makefiles), path is Builds/<Generator>/<Config>/
-	for _, availableGen := range ps.AvailableGenerators {
-		if availableGen.Name == gen {
-			if availableGen.IsMultiConfig {
-				return filepath.Join(ps.WorkingDirectory, "Builds", gen)
-			} else {
-				return filepath.Join(ps.WorkingDirectory, "Builds", gen, ps.Configuration)
-			}
-		}
-	}
-	return ""
+	// All projects are multi-config: Builds/<Generator>/
+	return filepath.Join(ps.WorkingDirectory, "Builds", gen)
 }
 
 // GetBuildDirectory returns the build directory path for given generator and config
 func (ps *ProjectState) GetBuildDirectory(generatorName string, config string) string {
-	for _, gen := range ps.AvailableGenerators {
-		if gen.Name == generatorName {
-			if gen.IsMultiConfig {
-				return filepath.Join(ps.WorkingDirectory, "Builds", generatorName)
-			}
-			return filepath.Join(ps.WorkingDirectory, "Builds", generatorName, config)
-		}
-	}
-	return ""
-}
-
-// IsGeneratorMultiConfig returns true if generator is multi-config
-func (ps *ProjectState) IsGeneratorMultiConfig(generatorName string) bool {
-	for _, gen := range ps.AvailableGenerators {
-		if gen.Name == generatorName {
-			return gen.IsMultiConfig
-		}
-	}
-	return false
+	// All projects are multi-config: Builds/<Generator>/
+	return filepath.Join(ps.WorkingDirectory, "Builds", generatorName)
 }
 
 // scanBuildDirectories scans for existing build directories
@@ -301,27 +268,12 @@ func (ps *ProjectState) scanBuildDirectories(rootDir string) {
 		if _, err := os.Stat(cachePath); err == nil {
 			buildInfo.IsConfigured = true
 
-			// For multi-config generators, detect available configurations
-			if ps.isMultiConfigGenerator(generatorName) {
-				buildInfo.Configs = ps.detectConfigurations(buildPath)
-			} else {
-				// Single-config generators have one configuration
-				buildInfo.Configs = []string{ps.Configuration}
-			}
+			// All projects are multi-config, detect available configurations
+			buildInfo.Configs = ps.detectConfigurations(buildPath)
 		}
 
 		ps.Builds[generatorName] = buildInfo
 	}
-}
-
-// isMultiConfigGenerator checks if a generator supports multiple configurations
-func (ps *ProjectState) isMultiConfigGenerator(generatorName string) bool {
-	for _, gen := range ps.AvailableGenerators {
-		if gen.Name == generatorName {
-			return gen.IsMultiConfig
-		}
-	}
-	return false
 }
 
 // detectConfigurations scans for available build configurations
@@ -383,8 +335,8 @@ func (ps *ProjectState) CanOpenEditor() bool {
 	return buildInfo.Exists
 }
 
-// GetGeneratorLabel returns a display-friendly generator name
-func (ps *ProjectState) GetGeneratorLabel() string {
+// GetProjectLabel returns a display-friendly generator name
+func (ps *ProjectState) GetProjectLabel() string {
 	name := ps.SelectedGenerator
 
 	// Truncate long names for display

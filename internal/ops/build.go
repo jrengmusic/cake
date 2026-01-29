@@ -1,10 +1,10 @@
 package ops
 
 import (
-	"os"
+	"bufio"
+	"cake/internal/ui"
 	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 type BuildResult struct {
@@ -13,64 +13,71 @@ type BuildResult struct {
 	Error    string
 }
 
-func ExecuteBuildProject(generator, config string, projectRoot string, isMultiConfig bool, outputCallback func(string)) BuildResult {
-	// Determine build path based on generator type
-	// Multi-config generators (Xcode, VS): Builds/<Generator>/
-	// Single-config generators (Ninja, Makefiles): Builds/<Generator>/<Config>/
-	var buildDir string
-	if isMultiConfig {
-		buildDir = filepath.Join(projectRoot, "Builds", generator)
-	} else {
-		buildDir = filepath.Join(projectRoot, "Builds", generator, config)
-	}
+func ExecuteBuildProject(generator, config, projectRoot string, outputCallback func(string, ui.OutputLineType)) BuildResult {
+	buildDir := filepath.Join(projectRoot, "Builds", generator)
 
-	var args []string
-	if isMultiConfig {
-		args = []string{"--build", buildDir, "--config", config}
-	} else {
-		args = []string{"--build", buildDir}
-	}
+	args := []string{"--build", buildDir, "--config", config}
 
-	// Verify build directory exists
-	if !directoryExists(buildDir) {
-		return BuildResult{Success: false, Error: "Build directory not found: " + buildDir}
-	}
+	outputCallback("Building: "+buildDir, ui.TypeInfo)
+	outputCallback("Project: "+generator, ui.TypeInfo)
+	outputCallback("Configuration: "+config, ui.TypeInfo)
+	outputCallback("", ui.TypeStdout)
 
-	outputCallback("Building: " + buildDir)
-	outputCallback("Generator: " + generator)
-	outputCallback("Configuration: " + config)
-	outputCallback("")
-
-	// Use cmake --build for all generators (unified approach)
 	cmd := exec.Command("cmake", args...)
 	cmd.Dir = projectRoot
 
-	outputCallback("Running: cmake " + strings.Join(args, " "))
-	outputCallback("")
-
-	output, err := cmd.CombinedOutput()
-
-	for _, line := range strings.Split(string(output), "\n") {
-		if line != "" {
-			outputCallback(line)
-		}
+	// Get stdout pipe for streaming
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		outputCallback("ERROR: Failed to create stdout pipe", ui.TypeStderr)
+		return BuildResult{Success: false, Error: err.Error()}
 	}
+
+	// Get stderr pipe for streaming
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		outputCallback("ERROR: Failed to create stderr pipe", ui.TypeStderr)
+		return BuildResult{Success: false, Error: err.Error()}
+	}
+
+	// Start command
+	if err := cmd.Start(); err != nil {
+		outputCallback("ERROR: Failed to start command", ui.TypeStderr)
+		return BuildResult{Success: false, Error: err.Error()}
+	}
+
+	// Stream stdout in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				outputCallback(line, ui.TypeStdout)
+			}
+		}
+	}()
+
+	// Stream stderr in goroutine
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			if line != "" {
+				outputCallback(line, ui.TypeStderr)
+			}
+		}
+	}()
+
+	// Wait for command to complete
+	err = cmd.Wait()
 
 	if err != nil {
-		outputCallback("")
-		outputCallback("ERROR: Build failed")
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return BuildResult{Success: false, ExitCode: exitErr.ExitCode(), Error: err.Error()}
-		}
-		return BuildResult{Success: false, ExitCode: 1, Error: err.Error()}
+		outputCallback("", ui.TypeStdout)
+		outputCallback("ERROR: Build failed", ui.TypeStderr)
+		return BuildResult{Success: false, Error: err.Error()}
 	}
 
-	outputCallback("")
-	outputCallback("Build completed successfully")
+	outputCallback("", ui.TypeStdout)
+	outputCallback("Build completed successfully", ui.TypeStatus)
 	return BuildResult{Success: true, ExitCode: 0}
-}
-
-func directoryExists(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.IsDir()
 }

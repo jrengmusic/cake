@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"cake/internal/ui"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,7 +14,9 @@ type OpenResult struct {
 }
 
 // ExecuteOpenIDE opens the IDE project for the given build directory
-func ExecuteOpenIDE(generator, buildDir string, outputCallback func(string)) OpenResult {
+func ExecuteOpenIDE(generator, config, projectRoot string, outputCallback func(string, ui.OutputLineType)) OpenResult {
+	buildDir := filepath.Join(projectRoot, "Builds", generator)
+
 	var projectFile string
 
 	switch generator {
@@ -23,7 +26,7 @@ func ExecuteOpenIDE(generator, buildDir string, outputCallback func(string)) Ope
 			return OpenResult{Success: false, Error: "No Xcode project found"}
 		}
 		cmd := exec.Command("open", projectFile)
-		outputCallback("Opening Xcode project: " + projectFile)
+		outputCallback("Opening Xcode project: "+projectFile, ui.TypeInfo)
 		if err := cmd.Run(); err != nil {
 			return OpenResult{Success: false, Error: err.Error()}
 		}
@@ -35,26 +38,26 @@ func ExecuteOpenIDE(generator, buildDir string, outputCallback func(string)) Ope
 			return OpenResult{Success: false, Error: "No Visual Studio solution found"}
 		}
 		cmd := exec.Command("cmd", "/c", "start", projectFile)
-		outputCallback("Opening Visual Studio: " + projectFile)
+		outputCallback("Opening Visual Studio: "+projectFile, ui.TypeInfo)
 		if err := cmd.Run(); err != nil {
 			return OpenResult{Success: false, Error: err.Error()}
 		}
 		return OpenResult{Success: true}
 
 	default:
-		return OpenResult{Success: false, Error: "Unsupported IDE generator: " + generator}
+		return OpenResult{Success: false, Error: "Unsupported IDE project: " + generator}
 	}
 }
 
 // ExecuteOpenEditor opens the editor (Neovim) in the build directory
-func ExecuteOpenEditor(buildDir string, outputCallback func(string)) OpenResult {
+func ExecuteOpenEditor(buildDir string, outputCallback func(string, ui.OutputLineType)) OpenResult {
 	cmd := exec.Command("nvim", ".")
 	cmd.Dir = buildDir
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	outputCallback("Opening Neovim in: " + buildDir)
+	outputCallback("Opening Neovim in: "+buildDir, ui.TypeInfo)
 
 	if err := cmd.Run(); err != nil {
 		return OpenResult{Success: false, Error: err.Error()}

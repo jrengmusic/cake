@@ -39,6 +39,15 @@ type GenerateCompleteMsg struct {
 	Error   string
 }
 
+type RegenerateCompleteMsg struct {
+	Success bool
+	Error   string
+}
+
+// OutputRefreshMsg triggers UI re-render to show updated console output
+// Sent periodically during long-running operations to display streaming output
+type OutputRefreshMsg struct{}
+
 // AutoScanTickMsg is sent periodically to trigger auto-scan
 type AutoScanTickMsg struct{}
 

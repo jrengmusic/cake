@@ -4,6 +4,8 @@ import (
 	"cake/internal/config"
 	"cake/internal/state"
 	"cake/internal/ui"
+	"context"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -37,12 +39,16 @@ type Application struct {
 	quitConfirmActive bool
 	quitConfirmTime   time.Time
 
-	consoleState ui.ConsoleOutState
-	outputBuffer *ui.OutputBuffer
+	consoleState      ui.ConsoleOutState
+	outputBuffer      *ui.OutputBuffer
+	consoleAutoScroll bool // Auto-scroll console to bottom (disabled on manual scroll)
 
 	asyncState    *AsyncState
 	windowSize    WindowSizeHandler
 	keyDispatcher *KeyDispatcher
+
+	runningCmd    *exec.Cmd
+	cancelContext context.CancelFunc
 
 	footerHint   string
 	isScanning   bool
@@ -58,6 +64,8 @@ func (a *Application) Init() tea.Cmd {
 	a.menuItems = a.GenerateMenu()
 	a.lastBuildDir = a.projectState.GetBuildPath()
 	a.asyncState = NewAsyncState()
+	// Start with auto-scroll enabled (TIT pattern: scroll follows output until user intervenes)
+	a.consoleAutoScroll = true
 	a.windowSize = WindowSizeHandler{}
 	a.keyDispatcher = NewKeyDispatcher()
 
@@ -136,6 +144,13 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.windowSize.Handle(a, msg)
 	}
 
+	// Handle confirmation dialog keys FIRST (before mode-specific handlers)
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if a.confirmDialog != nil && a.confirmDialog.Active {
+			return a.handleConfirmDialogKeyPress(keyMsg)
+		}
+	}
+
 	if a.keyDispatcher.CanHandle(msg) {
 		return a.keyDispatcher.Handle(a, msg)
 	}
@@ -153,6 +168,11 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case GenerateCompleteMsg:
 		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
+			a.footerHint = "Operation aborted"
+			return a, nil
+		}
 		a.projectState.ForceRefresh()
 		a.menuItems = a.GenerateMenu()
 		if msg.Success {
@@ -164,6 +184,11 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case BuildCompleteMsg:
 		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
+			a.footerHint = "Operation aborted"
+			return a, nil
+		}
 		if msg.Success {
 			a.footerHint = GetFooterMessageText(MessageOperationComplete)
 		} else {
@@ -173,6 +198,11 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case CleanCompleteMsg:
 		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
+			a.footerHint = "Operation aborted"
+			return a, nil
+		}
 		a.projectState.ForceRefresh()
 		a.menuItems = a.GenerateMenu()
 		if msg.Success {
@@ -191,6 +221,22 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 
+	case RegenerateCompleteMsg:
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
+			a.footerHint = "Operation aborted"
+			return a, nil
+		}
+		a.projectState.ForceRefresh()
+		a.menuItems = a.GenerateMenu()
+		if msg.Success {
+			a.footerHint = GetFooterMessageText(MessageOperationComplete)
+		} else {
+			a.footerHint = "Regenerate failed: " + msg.Error
+		}
+		return a, nil
+
 	case OpenEditorCompleteMsg:
 		a.asyncState.End()
 		if msg.Success {
@@ -198,6 +244,17 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a.footerHint = "Failed to open editor: " + msg.Error
 		}
+		return a, nil
+
+	case OutputRefreshMsg:
+		// Force re-render to display updated console output
+		// If operation still active, schedule next refresh tick
+		if a.asyncState.IsActive() {
+			return a, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+				return OutputRefreshMsg{}
+			})
+		}
+		// Operation completed, stop sending refresh messages
 		return a, nil
 	}
 
@@ -231,14 +288,18 @@ func (a *Application) View() string {
 		return ui.RenderReactiveLayout(a.sizing, a.theme, headerText, dialogContent, footerText)
 	}
 
+	// Console mode: render directly without layout wrapper (TIT pattern)
+	// Console handles its own sizing and footer placement
+	if a.mode == ModeConsole {
+		return a.renderConsoleMode()
+	}
+
 	var contentText string
 	switch a.mode {
 	case ModeMenu:
 		contentText = a.renderMenuWithBanner()
 	case ModePreferences:
 		contentText = a.renderPreferencesWithBanner()
-	case ModeConsole:
-		contentText = a.renderConsoleMode()
 	default:
 		contentText = a.renderMenuWithBanner()
 	}
@@ -255,9 +316,48 @@ func (a *Application) handleConfirmDialogKeyPress(msg tea.KeyMsg) (tea.Model, te
 	key := msg.String()
 
 	switch key {
-	case "y", "Y", "enter":
-		// User selected Yes
+	case "ctrl+c":
+		// Global quit from confirmation dialog
+		if a.quitConfirmActive {
+			// Second Ctrl+C - quit the app
+			return a, tea.Quit
+		}
+		// First Ctrl+C - start timeout, keep dialog open
+		a.quitConfirmActive = true
+		a.quitConfirmTime = time.Now()
+		a.footerHint = GetFooterMessageText(MessageCtrlCConfirm)
+		return a, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
+			return TickMsg(t)
+		})
+
+	case "y", "Y":
+		// User pressed Y - always select Yes
+		a.confirmDialog.Active = false
+		if a.pendingOperation != "" {
+			op := a.pendingOperation
+			a.pendingOperation = ""
+			switch op {
+			case "generate":
+				return a.startGenerateOperation()
+			case "clean":
+				return a.startCleanOperation()
+			case "regenerate":
+				return a.startRegenerateOperation()
+			}
+		}
+		return a, nil
+
+	case "n", "N":
+		// User pressed N - always cancel
+		a.confirmDialog.Active = false
+		a.confirmDialog = nil
+		a.pendingOperation = ""
+		return a, nil
+
+	case "enter", " ":
+		// Execute whichever button is currently selected
 		if a.confirmDialog.GetSelectedButton() == ButtonYes {
+			// Yes is selected - execute the operation
 			a.confirmDialog.Active = false
 			if a.pendingOperation != "" {
 				op := a.pendingOperation
@@ -267,26 +367,33 @@ func (a *Application) handleConfirmDialogKeyPress(msg tea.KeyMsg) (tea.Model, te
 					return a.startGenerateOperation()
 				case "clean":
 					return a.startCleanOperation()
+				case "regenerate":
+					return a.startRegenerateOperation()
 				}
 			}
+		} else {
+			// No is selected - cancel
+			a.confirmDialog.Active = false
+			a.confirmDialog = nil
+			a.pendingOperation = ""
 		}
 		return a, nil
 
-	case "n", "N", "esc":
-		// User selected No or cancelled
+	case "esc":
+		// ESC always cancels
 		a.confirmDialog.Active = false
 		a.confirmDialog = nil
 		a.pendingOperation = ""
 		return a, nil
 
 	case "left", "h":
-		// Move to No button
-		a.confirmDialog.SelectNo()
+		// Move to Yes button (Yes is on the left)
+		a.confirmDialog.SelectYes()
 		return a, nil
 
 	case "right", "l":
-		// Move to Yes button
-		a.confirmDialog.SelectYes()
+		// Move to No button (No is on the right)
+		a.confirmDialog.SelectNo()
 		return a, nil
 
 	default:
@@ -336,29 +443,29 @@ func (a *Application) GetVisibleRows() []ui.MenuRow {
 	return visible
 }
 
-// GetVisibleIndex returns the visible index for a given row ID
-// Returns -1 if row is hidden
+// GetVisibleIndex returns the visible selectable index for a given row ID
+// Returns -1 if row is hidden or not selectable
 func (a *Application) GetVisibleIndex(rowID string) int {
 	visibleIndex := 0
 	for _, row := range a.menuItems {
 		if row.ID == rowID {
-			if row.Visible {
+			if row.Visible && row.IsSelectable {
 				return visibleIndex
 			}
 			return -1
 		}
-		if row.Visible {
+		if row.Visible && row.IsSelectable {
 			visibleIndex++
 		}
 	}
 	return -1
 }
 
-// GetArrayIndex returns the array index for a given visible index
+// GetArrayIndex returns the array index for a given visible selectable index
 func (a *Application) GetArrayIndex(visibleIdx int) int {
 	visibleCount := 0
 	for i, row := range a.menuItems {
-		if row.Visible {
+		if row.Visible && row.IsSelectable {
 			if visibleCount == visibleIdx {
 				return i
 			}
@@ -402,14 +509,42 @@ func (a *Application) TogglePreferenceAtIndex(index int) bool {
 // executeRowAction executes the action associated with a menu row
 func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 	switch rowID {
-	case "generator":
+	case "project":
 		// Cycle to next generator
 		a.projectState.CycleToNextGenerator()
 		a.menuItems = a.GenerateMenu()
 		return true, nil
 	case "regenerate":
-		_, cmd := a.startGenerateOperation()
-		return true, cmd
+		// Check if build exists for selected project
+		buildInfo := a.projectState.GetSelectedBuildInfo()
+		if !buildInfo.Exists {
+			// No existing build - just generate without confirmation
+			_, cmd := a.startGenerateOperation()
+			return true, cmd
+		}
+		// Build exists - show confirmation dialog for regenerate (default to No for safety)
+		a.confirmDialog = ui.NewConfirmationDialogWithDefault(ui.ConfirmationConfig{
+			Title:       "Regenerate Project",
+			Explanation: "Clean and re-run CMake configuration?",
+			YesLabel:    "Yes",
+			NoLabel:     "No",
+			ActionID:    "regenerate",
+		}, a.sizing.ContentInnerWidth, &a.theme, ui.ButtonNo)
+		a.confirmDialog.Active = true
+		a.pendingOperation = "regenerate"
+		return true, nil
+	case "clean":
+		// Show confirmation dialog for clean (default to No for safety)
+		a.confirmDialog = ui.NewConfirmationDialogWithDefault(ui.ConfirmationConfig{
+			Title:       "Clean Build Directory",
+			Explanation: "Remove all build artifacts?",
+			YesLabel:    "Yes",
+			NoLabel:     "No",
+			ActionID:    "clean",
+		}, a.sizing.ContentInnerWidth, &a.theme, ui.ButtonNo)
+		a.confirmDialog.Active = true
+		a.pendingOperation = "clean"
+		return true, nil
 	case "openIde":
 		_, cmd := a.startOpenIDEOperation()
 		return true, cmd
@@ -420,9 +555,6 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 		return true, nil
 	case "build":
 		_, cmd := a.startBuildOperation()
-		return true, cmd
-	case "clean":
-		_, cmd := a.startCleanOperation()
 		return true, cmd
 	}
 	return false, nil
@@ -513,16 +645,35 @@ func (a *Application) renderPreferenceMenuRows(maxWidth int, rows []ui.MenuRow) 
 }
 
 func (a *Application) renderConsoleMode() string {
-	return ui.RenderConsoleOutput(
+	// Console height accounts for footer (TIT pattern: console fills space above footer)
+	consoleHeight := a.sizing.TerminalHeight - ui.FooterHeight
+
+	consoleContent := ui.RenderConsoleOutput(
 		&a.consoleState,
 		a.outputBuffer,
 		a.theme,
-		a.sizing.ContentInnerWidth,
-		a.sizing.ContentHeight,
+		a.sizing.TerminalWidth,
+		consoleHeight,
 		a.asyncState.IsActive(),
 		false,
-		a.asyncState.IsActive(),
+		a.consoleAutoScroll,
 	)
+
+	footerText := a.GetFooterContent()
+
+	// Footer only - console handles its own OUTPUT title (TIT pattern)
+	footerSection := lipgloss.Place(
+		a.sizing.TerminalWidth,
+		ui.FooterHeight,
+		lipgloss.Left,
+		lipgloss.Top,
+		lipgloss.NewStyle().
+			Foreground(lipgloss.Color(a.theme.FooterTextColor)).
+			Render(footerText),
+	)
+
+	// Join console + footer
+	return lipgloss.JoinVertical(lipgloss.Left, consoleContent, footerSection)
 }
 
 func (a *Application) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -591,7 +742,7 @@ func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case "g", "G":
 		// Generate/Regenerate - jump to row and execute
-		idx := a.GetVisibleIndex("generate")
+		idx := a.GetVisibleIndex("regenerate")
 		if idx >= 0 {
 			a.selectedIndex = idx
 			handled, cmd := a.ToggleRowAtIndex(idx)
@@ -739,12 +890,28 @@ func (a *Application) handleOperationKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cm
 	switch msg.String() {
 	case "up":
 		a.consoleState.ScrollUp()
+		a.consoleAutoScroll = false // Disable auto-scroll on manual scroll (TIT pattern)
 		return a, nil
 	case "down":
 		a.consoleState.ScrollDown()
+		a.consoleAutoScroll = false // Disable auto-scroll on manual scroll (TIT pattern)
 		return a, nil
 	case "esc":
-		if !a.asyncState.IsActive() {
+		if a.asyncState.IsActive() {
+			// Kill running process (like Ctrl+C)
+			if a.runningCmd != nil && a.runningCmd.Process != nil {
+				a.runningCmd.Process.Kill()
+			}
+			if a.cancelContext != nil {
+				a.cancelContext()
+			}
+			a.asyncState.Abort()
+			// Print abort message to console using stderr color from theme
+			a.outputBuffer.Append("", ui.TypeStdout)
+			a.outputBuffer.Append("Operation aborted by user", ui.TypeStderr)
+			a.outputBuffer.Append("Press ESC to return to menu", ui.TypeInfo)
+		} else {
+			// Return to menu when idle
 			a.mode = ModeMenu
 			a.selectedIndex = 0
 			a.menuItems = a.GenerateMenu()
@@ -773,5 +940,13 @@ func (a *Application) handleCtrlC() (tea.Model, tea.Cmd) {
 
 	return a, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
 		return TickMsg(t)
+	})
+}
+
+// cmdRefreshConsole sends periodic refresh messages while async operation is active
+// This forces UI re-renders to display streaming output in real-time
+func (a *Application) cmdRefreshConsole() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return OutputRefreshMsg{}
 	})
 }

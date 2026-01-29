@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"cake/internal/ui"
 	"os"
 	"path/filepath"
 )
@@ -10,46 +11,26 @@ type CleanResult struct {
 	Error   string
 }
 
-func ExecuteCleanProject(generator, config string, projectRoot string, isMultiConfig bool, outputCallback func(string)) CleanResult {
-	// Determine build path based on generator type
-	// Multi-config generators (Xcode, VS): Builds/<Generator>/
-	// Single-config generators (Ninja, Makefiles): Builds/<Generator>/<Config>/
-	var buildDir string
-	if isMultiConfig {
-		buildDir = filepath.Join(projectRoot, "Builds", generator)
-	} else {
-		buildDir = filepath.Join(projectRoot, "Builds", generator, config)
+func ExecuteCleanProject(generator, config, projectRoot string, outputCallback func(string, ui.OutputLineType)) CleanResult {
+	buildDir := filepath.Join(projectRoot, "Builds", generator)
+
+	outputCallback("Cleaning...", ui.TypeInfo)
+
+	if _, err := os.Stat(buildDir); os.IsNotExist(err) {
+		outputCallback("Project directory clean.", ui.TypeStatus)
+		outputCallback("Press ESC to return to menu", ui.TypeInfo)
+		return CleanResult{Success: true}
 	}
 
-	if buildDir == "" {
-		return CleanResult{Success: false, Error: "Build directory is empty"}
-	}
-
-	outputCallback("Cleaning: " + buildDir)
-	outputCallback("")
-
-	dirToDelete, err := os.Stat(buildDir)
+	err := os.RemoveAll(buildDir)
 	if err != nil {
-		outputCallback("ERROR: Directory not found: " + buildDir)
+		outputCallback("ERROR: Failed to remove directory", ui.TypeStderr)
+		outputCallback(err.Error(), ui.TypeStderr)
 		return CleanResult{Success: false, Error: err.Error()}
 	}
 
-	if !dirToDelete.IsDir() {
-		outputCallback("ERROR: Not a directory: " + buildDir)
-		return CleanResult{Success: false, Error: "Not a directory"}
-	}
-
-	outputCallback("Deleting: " + buildDir)
-
-	err = os.RemoveAll(buildDir)
-	if err != nil {
-		outputCallback("ERROR: Failed to remove directory")
-		outputCallback(err.Error())
-		return CleanResult{Success: false, Error: err.Error()}
-	}
-
-	outputCallback("Successfully removed build directory")
-	outputCallback("")
-	outputCallback("Clean completed successfully")
+	outputCallback("ok", ui.TypeStatus)
+	outputCallback("Project directory clean.", ui.TypeStatus)
+	outputCallback("Press ESC to return to menu", ui.TypeInfo)
 	return CleanResult{Success: true}
 }

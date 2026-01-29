@@ -10,7 +10,7 @@ func (a *Application) GenerateMenu() []ui.MenuRow {
 	hasBuild := buildInfo.Exists
 
 	return ui.GenerateMenuRows(
-		a.projectState.GetGeneratorLabel(),
+		a.projectState.GetProjectLabel(),
 		a.projectState.Configuration,
 		canOpenIDE,
 		canClean,

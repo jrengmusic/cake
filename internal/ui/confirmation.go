@@ -46,6 +46,18 @@ func NewConfirmationDialog(config ConfirmationConfig, width int, theme *Theme) *
 	}
 }
 
+// NewConfirmationDialogWithDefault creates a confirmation dialog with specified default button
+func NewConfirmationDialogWithDefault(config ConfirmationConfig, width int, theme *Theme, defaultButton ButtonSelection) *ConfirmationDialog {
+	return &ConfirmationDialog{
+		Config:         config,
+		Width:          width,
+		Theme:          theme,
+		Active:         false,
+		Context:        make(map[string]string),
+		SelectedButton: defaultButton,
+	}
+}
+
 // SetContext sets the context for placeholder substitution
 func (c *ConfirmationDialog) SetContext(context map[string]string) {
 	c.Context = context

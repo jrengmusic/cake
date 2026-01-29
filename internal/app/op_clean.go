@@ -11,28 +11,26 @@ func (a *Application) startCleanOperation() (tea.Model, tea.Cmd) {
 	a.mode = ModeConsole
 	a.asyncState.Start()
 	a.outputBuffer.Clear()
+	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
 	a.footerHint = GetFooterMessageText(MessageCleanInProgress)
-	return a, a.cmdCleanProject()
+	return a, tea.Batch(a.cmdCleanProject(), a.cmdRefreshConsole())
 }
 
 // cmdCleanProject executes the clean command
 func (a *Application) cmdCleanProject() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
+		outputCallback := func(line string, lineType ui.OutputLineType) {
+			a.outputBuffer.Append(line, lineType)
 		}
 
-		generator := a.projectState.SelectedGenerator
+		project := a.projectState.SelectedGenerator
 		config := a.projectState.Configuration
 		projectRoot := a.projectState.WorkingDirectory
 
-		isMultiConfig := a.projectState.IsGeneratorMultiConfig(generator)
-
 		result := ops.ExecuteCleanProject(
-			generator,
+			project,
 			config,
 			projectRoot,
-			isMultiConfig,
 			outputCallback,
 		)
 

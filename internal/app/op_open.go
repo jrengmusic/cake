@@ -6,7 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// startOpenIDEOperation opens the IDE for the selected generator
+// startOpenIDEOperation opens the IDE for the selected project
 func (a *Application) startOpenIDEOperation() (tea.Model, tea.Cmd) {
 	a.asyncState.Start()
 	a.outputBuffer.Clear()
@@ -18,16 +18,20 @@ func (a *Application) startOpenIDEOperation() (tea.Model, tea.Cmd) {
 // cmdOpenIDE executes the open IDE command
 func (a *Application) cmdOpenIDE() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
+		outputCallback := func(line string, lineType ui.OutputLineType) {
+			a.outputBuffer.Append(line, lineType)
 		}
 
-		generator := a.projectState.SelectedGenerator
+		project := a.projectState.SelectedGenerator
 		config := a.projectState.Configuration
+		projectRoot := a.projectState.WorkingDirectory
 
-		buildPath := a.projectState.GetBuildDirectory(generator, config)
-
-		result := ops.ExecuteOpenIDE(generator, buildPath, outputCallback)
+		result := ops.ExecuteOpenIDE(
+			project,
+			config,
+			projectRoot,
+			outputCallback,
+		)
 
 		return OpenIDECompleteMsg{
 			Success: result.Success,
@@ -48,14 +52,11 @@ func (a *Application) startOpenEditorOperation() (tea.Model, tea.Cmd) {
 // cmdOpenEditor executes the open editor command
 func (a *Application) cmdOpenEditor() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
+		outputCallback := func(line string, lineType ui.OutputLineType) {
+			a.outputBuffer.Append(line, lineType)
 		}
 
-		generator := a.projectState.SelectedGenerator
-		config := a.projectState.Configuration
-
-		buildPath := a.projectState.GetBuildDirectory(generator, config)
+		buildPath := a.projectState.GetBuildPath()
 
 		result := ops.ExecuteOpenEditor(buildPath, outputCallback)
 

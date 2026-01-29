@@ -3,6 +3,7 @@ package app
 import (
 	"cake/internal/ops"
 	"cake/internal/ui"
+	"context"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -11,28 +12,32 @@ func (a *Application) startGenerateOperation() (tea.Model, tea.Cmd) {
 	a.mode = ModeConsole
 	a.asyncState.Start()
 	a.outputBuffer.Clear()
+	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
 	a.footerHint = GetFooterMessageText(MessageSetupInProgress)
-	return a, a.cmdGenerateProject()
+
+	// Create cancellable context for process termination
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancelContext = cancel
+
+	return a, tea.Batch(a.cmdGenerateProject(ctx), a.cmdRefreshConsole())
 }
 
 // cmdGenerateProject executes the generate/regenerate command
-func (a *Application) cmdGenerateProject() tea.Cmd {
+func (a *Application) cmdGenerateProject(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string) {
-			a.outputBuffer.Append(line, ui.TypeStdout)
+		outputCallback := func(line string, lineType ui.OutputLineType) {
+			a.outputBuffer.Append(line, lineType)
 		}
 
 		generator := a.projectState.SelectedGenerator
 		config := a.projectState.Configuration
 		projectRoot := a.projectState.WorkingDirectory
 
-		isMultiConfig := a.projectState.IsGeneratorMultiConfig(generator)
-
 		result := ops.ExecuteSetupProject(
+			ctx,
 			projectRoot,
 			generator,
 			config,
-			isMultiConfig,
 			outputCallback,
 		)
 
