@@ -329,7 +329,7 @@ func (a *Application) View() string {
 	switch a.mode {
 	case ModeInvalidProject:
 		// Not a CMake project - show "cake is a lie" banner centered
-		contentText = ui.RenderCakeLieBanner(a.sizing.ContentInnerWidth, a.sizing.ContentHeight, a.theme)
+		contentText = ui.RenderCakeLieBanner(a.sizing.ContentInnerWidth, a.sizing.ContentHeight)
 		// Footer is handled by GetFooterContent() which checks quitConfirmActive
 		// No need to override footerText here
 	case ModeMenu:
