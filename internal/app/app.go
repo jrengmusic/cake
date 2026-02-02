@@ -5,9 +5,9 @@ import (
 	"cake/internal/state"
 	"cake/internal/ui"
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -57,6 +57,8 @@ type Application struct {
 	confirmDialog *ui.ConfirmationDialog // Confirmation dialog (TIT pattern)
 
 	pendingOperation string // Track operation to execute after confirmation
+
+	lastActivityTime time.Time // Track last user activity for lazy auto-scan (TIT pattern)
 }
 
 func (a *Application) Init() tea.Cmd {
@@ -68,6 +70,8 @@ func (a *Application) Init() tea.Cmd {
 	a.consoleAutoScroll = true
 	a.windowSize = WindowSizeHandler{}
 	a.keyDispatcher = NewKeyDispatcher()
+	// Initialize activity tracking for lazy auto-scan (TIT pattern)
+	a.lastActivityTime = time.Now()
 
 	// Register key handlers (wrapped to match dispatcher signature)
 	a.keyDispatcher.Register(ModeMenu, func(app *Application, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -98,10 +102,17 @@ func (a *Application) cmdAutoScanTick() tea.Cmd {
 	})
 }
 
-// handleAutoScanTick handles periodic auto-scan
+// handleAutoScanTick handles periodic auto-scan with lazy update (TIT pattern)
 func (a *Application) handleAutoScanTick() (tea.Model, tea.Cmd) {
 	// Skip scan during async operations
 	if a.asyncState.IsActive() {
+		return a, a.cmdAutoScanTick()
+	}
+
+	// Skip scan if user was recently active (lazy update - TIT pattern)
+	// This prevents interrupting the user while they're navigating
+	idleThreshold := 30 * time.Second
+	if time.Since(a.lastActivityTime) < idleThreshold {
 		return a, a.cmdAutoScanTick()
 	}
 
@@ -414,7 +425,7 @@ func (a *Application) renderMenuWithBanner() string {
 	menuColumn := lipgloss.NewStyle().
 		Width(leftWidth).
 		Height(a.sizing.ContentHeight).
-		Align(lipgloss.Center).
+		Align(lipgloss.Left).
 		AlignVertical(lipgloss.Center).
 		Render(menuContent)
 
@@ -475,9 +486,53 @@ func (a *Application) GetArrayIndex(visibleIdx int) int {
 	return -1
 }
 
-// GetVisiblePreferenceRows returns visible preference rows (stub for preferences mode)
+// GetVisiblePreferenceRows returns visible preference rows for preferences mode
+// TIT pattern: 3 preference items - auto-scan toggle, interval, theme
 func (a *Application) GetVisiblePreferenceRows() []ui.MenuRow {
-	return []ui.MenuRow{}
+	if a.config == nil {
+		return []ui.MenuRow{}
+	}
+
+	autoScanValue := "OFF"
+	if a.config.IsAutoScanEnabled() {
+		autoScanValue = "ON"
+	}
+
+	return []ui.MenuRow{
+		{
+			ID:           "prefs_auto_scan",
+			Shortcut:     "",
+			Emoji:        "🔄",
+			Label:        "Auto-scan",
+			Value:        autoScanValue,
+			Visible:      true,
+			IsAction:     false,
+			IsSelectable: true,
+			Hint:         "Toggle automatic project scanning",
+		},
+		{
+			ID:           "prefs_interval",
+			Shortcut:     "",
+			Emoji:        "⏱️",
+			Label:        "Scan Interval",
+			Value:        fmt.Sprintf("%d min", a.config.AutoScanInterval()),
+			Visible:      true,
+			IsAction:     false,
+			IsSelectable: true,
+			Hint:         "Adjust auto-scan interval (+/- 1min, =/_ 10min)",
+		},
+		{
+			ID:           "prefs_theme",
+			Shortcut:     "",
+			Emoji:        "🎨",
+			Label:        "Theme",
+			Value:        a.config.Theme(),
+			Visible:      true,
+			IsAction:     false,
+			IsSelectable: true,
+			Hint:         "Cycle through available themes",
+		},
+	}
 }
 
 // ToggleRowAtIndex handles menu row toggle/action at given VISIBLE index
@@ -501,8 +556,52 @@ func (a *Application) RowIndexByID(rowID string) int {
 	return -1
 }
 
-// TogglePreferenceAtIndex toggles preference at index (stub for preferences mode)
-func (a *Application) TogglePreferenceAtIndex(index int) bool {
+// TogglePreferenceAtIndex toggles preference at given VISIBLE index
+// Returns true if preference was toggled successfully
+func (a *Application) TogglePreferenceAtIndex(visibleIndex int) bool {
+	visibleRows := a.GetVisiblePreferenceRows()
+	if visibleIndex < 0 || visibleIndex >= len(visibleRows) {
+		return false
+	}
+
+	row := visibleRows[visibleIndex]
+
+	switch row.ID {
+	case "prefs_auto_scan":
+		// Toggle auto-scan enabled/disabled
+		newValue := !a.config.IsAutoScanEnabled()
+		if err := a.config.SetAutoScanEnabled(newValue); err != nil {
+			a.footerHint = fmt.Sprintf("Failed to save config: %v", err)
+			return false
+		}
+		return true
+
+	case "prefs_theme":
+		// Cycle to next theme
+		nextTheme, err := ui.GetNextTheme(a.config.Theme())
+		if err != nil {
+			a.footerHint = fmt.Sprintf("Failed to get next theme: %v", err)
+			return false
+		}
+		if err := a.config.SetTheme(nextTheme); err != nil {
+			a.footerHint = fmt.Sprintf("Failed to save theme: %v", err)
+			return false
+		}
+		// Reload theme immediately
+		newTheme, err := ui.LoadThemeByName(nextTheme)
+		if err != nil {
+			a.footerHint = fmt.Sprintf("Failed to load theme: %v", err)
+			return false
+		}
+		a.theme = newTheme
+		return true
+
+	case "prefs_interval":
+		// Interval is adjusted via +/- keys, not Enter
+		// Just refresh the display
+		return true
+	}
+
 	return false
 }
 
@@ -510,8 +609,8 @@ func (a *Application) TogglePreferenceAtIndex(index int) bool {
 func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 	switch rowID {
 	case "project":
-		// Cycle to next generator
-		a.projectState.CycleToNextGenerator()
+		// Cycle to next project
+		a.projectState.CycleToNextProject()
 		a.menuItems = a.GenerateMenu()
 		return true, nil
 	case "regenerate":
@@ -562,86 +661,8 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 
 // renderPreferencesWithBanner renders preferences (left 50%) + banner (right 50%)
 func (a *Application) renderPreferencesWithBanner() string {
-	// 50/50 split
-	leftWidth := a.sizing.ContentInnerWidth / 2
-	rightWidth := a.sizing.ContentInnerWidth - leftWidth
-
-	// Render preferences in left column
-	prefsContent := a.renderPreferenceMenuRows(leftWidth, a.GetVisiblePreferenceRows())
-
-	prefsColumn := lipgloss.NewStyle().
-		Width(leftWidth).
-		Height(a.sizing.ContentHeight).
-		Align(lipgloss.Left).
-		AlignVertical(lipgloss.Center).
-		Render(prefsContent)
-
-	// Render banner in right column
-	banner := ui.RenderBannerDynamic(rightWidth, a.sizing.ContentHeight)
-
-	bannerColumn := lipgloss.NewStyle().
-		Width(rightWidth).
-		Height(a.sizing.ContentHeight).
-		Align(lipgloss.Center).
-		AlignVertical(lipgloss.Center).
-		Render(banner)
-
-	// Join horizontally
-	return lipgloss.JoinHorizontal(lipgloss.Top, prefsColumn, bannerColumn)
-}
-
-// renderPreferenceMenuRows renders preference rows with proper formatting
-func (a *Application) renderPreferenceMenuRows(maxWidth int, rows []ui.MenuRow) string {
-	var lines []string
-
-	for i, row := range rows {
-		if row.ID == "separator" {
-			// Render separator line
-			line := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(a.theme.SeparatorColor)).
-				Render(strings.Repeat("─", maxWidth))
-			lines = append(lines, line)
-			continue
-		}
-
-		var line string
-
-		// Format: "EMOJI  LABEL           VALUE"
-		emoji := row.Emoji + " "
-		label := row.Label
-		value := row.Value
-
-		// Calculate spacing to right-align value
-		contentWidth := lipgloss.Width(emoji) + lipgloss.Width(label) + lipgloss.Width(value)
-		valueSpacing := ""
-		if maxWidth > contentWidth {
-			valueSpacing = strings.Repeat(" ", maxWidth-contentWidth)
-		}
-
-		rowText := emoji + label + valueSpacing + value
-
-		if i == a.selectedIndex {
-			// Selected row
-			line = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(a.theme.MainBackgroundColor)).
-				Background(lipgloss.Color(a.theme.MenuSelectionBackground)).
-				Bold(true).
-				Width(maxWidth).
-				Align(lipgloss.Left).
-				Render(rowText)
-		} else {
-			// Normal row
-			line = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(a.theme.LabelTextColor)).
-				Width(maxWidth).
-				Align(lipgloss.Left).
-				Render(rowText)
-		}
-
-		lines = append(lines, line)
-	}
-
-	return strings.Join(lines, "\n")
+	// Use TIT-style preferences rendering
+	return ui.RenderPreferencesWithBanner(a.config, a.selectedIndex, a.theme, a.sizing)
 }
 
 func (a *Application) renderConsoleMode() string {
@@ -694,6 +715,9 @@ func (a *Application) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Track user activity for lazy auto-scan (TIT pattern)
+	a.lastActivityTime = time.Now()
+
 	visibleRows := a.GetVisibleRows()
 	visibleCount := len(visibleRows)
 
@@ -837,6 +861,9 @@ func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *Application) handlePreferencesKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Track user activity for lazy auto-scan (TIT pattern)
+	a.lastActivityTime = time.Now()
+
 	visibleRows := a.GetVisiblePreferenceRows()
 	visibleCount := len(visibleRows)
 
@@ -874,6 +901,54 @@ func (a *Application) handlePreferencesKeyPress(msg tea.KeyMsg) (tea.Model, tea.
 			return a, nil
 		}
 		return a, nil
+	case "+", "=":
+		// Increment interval by 1 minute
+		if visibleRows[a.selectedIndex].ID == "prefs_interval" {
+			newInterval := a.config.AutoScanInterval() + 1
+			if newInterval > 60 {
+				newInterval = 60
+			}
+			if err := a.config.SetAutoScanInterval(newInterval); err != nil {
+				a.footerHint = fmt.Sprintf("Failed to save config: %v", err)
+			}
+		}
+		return a, nil
+	case "-", "_":
+		// Decrement interval by 1 minute
+		if visibleRows[a.selectedIndex].ID == "prefs_interval" {
+			newInterval := a.config.AutoScanInterval() - 1
+			if newInterval < 1 {
+				newInterval = 1
+			}
+			if err := a.config.SetAutoScanInterval(newInterval); err != nil {
+				a.footerHint = fmt.Sprintf("Failed to save config: %v", err)
+			}
+		}
+		return a, nil
+	case "shift++", "shift+=":
+		// Increment interval by 10 minutes
+		if visibleRows[a.selectedIndex].ID == "prefs_interval" {
+			newInterval := a.config.AutoScanInterval() + 10
+			if newInterval > 60 {
+				newInterval = 60
+			}
+			if err := a.config.SetAutoScanInterval(newInterval); err != nil {
+				a.footerHint = fmt.Sprintf("Failed to save config: %v", err)
+			}
+		}
+		return a, nil
+	case "shift+-", "shift+_":
+		// Decrement interval by 10 minutes
+		if visibleRows[a.selectedIndex].ID == "prefs_interval" {
+			newInterval := a.config.AutoScanInterval() - 10
+			if newInterval < 1 {
+				newInterval = 1
+			}
+			if err := a.config.SetAutoScanInterval(newInterval); err != nil {
+				a.footerHint = fmt.Sprintf("Failed to save config: %v", err)
+			}
+		}
+		return a, nil
 	case "/", "esc":
 		// Return to main menu
 		a.mode = ModeMenu
@@ -887,6 +962,9 @@ func (a *Application) handlePreferencesKeyPress(msg tea.KeyMsg) (tea.Model, tea.
 }
 
 func (a *Application) handleOperationKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Track user activity for lazy auto-scan (TIT pattern)
+	a.lastActivityTime = time.Now()
+
 	switch msg.String() {
 	case "up":
 		a.consoleState.ScrollUp()

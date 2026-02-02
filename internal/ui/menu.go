@@ -7,12 +7,12 @@ import (
 )
 
 // MenuRow represents a single menu row
-// Fixed 7 rows: [0]Generator [1]Regenerate [2]OpenIDE [3]Separator [4]Configuration [5]Build [6]Clean
+// Fixed 7 rows: [0]Project [1]Regenerate [2]OpenIDE [3]Separator [4]Configuration [5]Build [6]Clean
 type MenuRow struct {
-	ID           string // "generator", "regenerate", "openIde", "separator", "configuration", "build", "clean"
+	ID           string // "project", "regenerate", "openIde", "separator", "configuration", "build", "clean"
 	Shortcut     string // "", "g", "o", "", "", "b", "c"
 	Emoji        string // "⚙️", "🚀", "📂", "", "🏗️", "🔨", "🧹"
-	Label        string // "Generator", "Regenerate", "Open IDE", "", "Configuration", "Build", "Clean"
+	Label        string // "Project", "Regenerate", "Open IDE", "", "Configuration", "Build", "Clean"
 	Value        string // "Xcode", "", "", "", "Debug", "", ""
 	Visible      bool   // true/false based on conditions
 	IsAction     bool   // false for toggles, true for actions
@@ -87,7 +87,7 @@ func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool
 			Visible:      true,
 			IsAction:     true,
 			IsSelectable: true,
-			Hint:         "Build the project with selected generator",
+			Hint:         "Build the project",
 		},
 		{
 			ID:           "clean",
@@ -104,16 +104,23 @@ func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool
 }
 
 // RenderCakeMenu renders cake menu with shortcut column
-// Columns: SHORTCUT(3) | EMOJI(3) | LABEL(18) | VALUE(12)
+// Columns: SHORTCUT(3) | EMOJI(3) | LABEL(18) | VALUE(14)
 func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeight int, contentWidth int) string {
 	// Column widths
-	const (
-		shortcutColWidth = 3
-		emojiColWidth    = 3
-		labelColWidth    = 18
-		valueColWidth    = 14
-		menuBoxWidth     = shortcutColWidth + emojiColWidth + labelColWidth + valueColWidth
-	)
+	shortcutColWidth := 3
+	emojiColWidth := 3
+	labelColWidth := 18
+	valueColWidth := 14
+
+	// Dynamically shrink label if content is too narrow
+	if contentWidth < (shortcutColWidth + emojiColWidth + labelColWidth + valueColWidth) {
+		labelColWidth = contentWidth - shortcutColWidth - emojiColWidth - valueColWidth
+		if labelColWidth < 0 {
+			labelColWidth = 0
+		}
+	}
+
+	menuBoxWidth := shortcutColWidth + emojiColWidth + labelColWidth + valueColWidth
 
 	var lines []string
 	visibleSelectableIndex := 0 // Tracks only visible AND selectable items

@@ -12,7 +12,7 @@ import (
 
 // Generator represents a CMake generator with metadata
 type Generator struct {
-	Name  string // CMake generator name: "Xcode", "Ninja", "Visual Studio 18 2026", "Visual Studio 17 2022"
+	Name  string // CMake project name: "Xcode", "Ninja", "Visual Studio 18 2026", "Visual Studio 17 2022"
 	IsIDE bool   // true for Xcode, VS; false for Ninja, Makefiles
 }
 
@@ -29,9 +29,9 @@ type BuildInfo struct {
 type ProjectState struct {
 	WorkingDirectory    string
 	HasCMakeLists       bool
-	AvailableGenerators []Generator          // Generators detected as available on system
-	SelectedGenerator   string               // Currently selected generator (cycled by user)
-	Builds              map[string]BuildInfo // Build state by generator name (Builds/<Generator>/)
+	AvailableProjects []Generator          // Projects detected as available on system
+	SelectedProject   string               // Currently selected project (cycled by user)
+	Builds              map[string]BuildInfo // Build state by project name (Builds/<Generator>/)
 	Configuration       string               // Current configuration: "Debug" or "Release"
 	IsPluginProject     bool
 	LastRefreshTime     time.Time
@@ -50,16 +50,16 @@ func NewProjectState() *ProjectState {
 	ps := &ProjectState{
 		WorkingDirectory:    cwd,
 		HasCMakeLists:       false,
-		AvailableGenerators: []Generator{},
-		SelectedGenerator:   "",
+		AvailableProjects: []Generator{},
+		SelectedProject:   "",
 		Builds:              make(map[string]BuildInfo),
 		Configuration:       "Debug",
 		IsPluginProject:     false,
 		RefreshInterval:     time.Second * 2,
 	}
 
-	// Detect available generators on startup
-	ps.DetectAvailableGenerators()
+	// Detect available projects on startup
+	ps.DetectAvailableProjects()
 
 	return ps
 }
@@ -88,9 +88,9 @@ func (ps *ProjectState) ForceRefresh() {
 
 	ps.scanBuildDirectories(cwd)
 
-	// Set default selected generator if none selected
-	if ps.SelectedGenerator == "" && len(ps.AvailableGenerators) > 0 {
-		ps.SelectedGenerator = ps.AvailableGenerators[0].Name
+	// Set default selected project if none selected
+	if ps.SelectedProject == "" && len(ps.AvailableProjects) > 0 {
+		ps.SelectedProject = ps.AvailableProjects[0].Name
 	}
 
 	ps.LastRefreshTime = time.Now()
@@ -104,14 +104,14 @@ func (ps *ProjectState) ShouldRefresh() bool {
 	return false
 }
 
-// DetectAvailableGenerators checks which generators are available on the system
-func (ps *ProjectState) DetectAvailableGenerators() {
-	ps.AvailableGenerators = []Generator{}
+// DetectAvailableProjects checks which generators are available on the system
+func (ps *ProjectState) DetectAvailableProjects() {
+	ps.AvailableProjects = []Generator{}
 
 	// Check Xcode (macOS only)
 	if runtime.GOOS == "darwin" {
 		if ps.checkCommandExists("xcodebuild") {
-			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
+			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
 				Name:  "Xcode",
 				IsIDE: true,
 			})
@@ -120,7 +120,7 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 
 	// Check Ninja (cross-platform)
 	if ps.checkCommandExists("ninja") {
-		ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
+		ps.AvailableProjects = append(ps.AvailableProjects, Generator{
 			Name:  "Ninja",
 			IsIDE: false,
 		})
@@ -130,11 +130,11 @@ func (ps *ProjectState) DetectAvailableGenerators() {
 	if runtime.GOOS == "windows" {
 		// Check for Visual Studio via vswhere or cmake generator availability
 		if ps.checkVSGeneratorAvailable() {
-			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
+			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
 				Name:  "Visual Studio 18 2026",
 				IsIDE: true,
 			})
-			ps.AvailableGenerators = append(ps.AvailableGenerators, Generator{
+			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
 				Name:  "Visual Studio 17 2022",
 				IsIDE: true,
 			})
@@ -150,7 +150,7 @@ func (ps *ProjectState) checkCommandExists(cmd string) bool {
 
 // checkVSGeneratorAvailable checks if Visual Studio generators are available
 func (ps *ProjectState) checkVSGeneratorAvailable() bool {
-	// Try to run cmake with --help to list generators
+	// Try to run cmake with --help to list projects
 	cmd := exec.Command("cmake", "--help")
 	output, err := cmd.Output()
 	if err != nil {
@@ -159,15 +159,15 @@ func (ps *ProjectState) checkVSGeneratorAvailable() bool {
 	return strings.Contains(string(output), "Visual Studio")
 }
 
-// CycleToNextGenerator advances to the next available generator
-func (ps *ProjectState) CycleToNextGenerator() {
-	if len(ps.AvailableGenerators) == 0 {
+// CycleToNextProject advances to the next available project
+func (ps *ProjectState) CycleToNextProject() {
+	if len(ps.AvailableProjects) == 0 {
 		return
 	}
 
 	currentIndex := -1
-	for i, gen := range ps.AvailableGenerators {
-		if gen.Name == ps.SelectedGenerator {
+	for i, gen := range ps.AvailableProjects {
+		if gen.Name == ps.SelectedProject {
 			currentIndex = i
 			break
 		}
@@ -175,22 +175,22 @@ func (ps *ProjectState) CycleToNextGenerator() {
 
 	// Move to next, wrapping around
 	if currentIndex >= 0 {
-		nextIndex := (currentIndex + 1) % len(ps.AvailableGenerators)
-		ps.SelectedGenerator = ps.AvailableGenerators[nextIndex].Name
+		nextIndex := (currentIndex + 1) % len(ps.AvailableProjects)
+		ps.SelectedProject = ps.AvailableProjects[nextIndex].Name
 	} else {
-		ps.SelectedGenerator = ps.AvailableGenerators[0].Name
+		ps.SelectedProject = ps.AvailableProjects[0].Name
 	}
 }
 
-// CycleToPrevGenerator advances to the previous available generator
-func (ps *ProjectState) CycleToPrevGenerator() {
-	if len(ps.AvailableGenerators) == 0 {
+// CycleToPrevProject advances to the previous available project
+func (ps *ProjectState) CycleToPrevProject() {
+	if len(ps.AvailableProjects) == 0 {
 		return
 	}
 
 	currentIndex := -1
-	for i, gen := range ps.AvailableGenerators {
-		if gen.Name == ps.SelectedGenerator {
+	for i, gen := range ps.AvailableProjects {
+		if gen.Name == ps.SelectedProject {
 			currentIndex = i
 			break
 		}
@@ -200,11 +200,11 @@ func (ps *ProjectState) CycleToPrevGenerator() {
 	if currentIndex >= 0 {
 		prevIndex := currentIndex - 1
 		if prevIndex < 0 {
-			prevIndex = len(ps.AvailableGenerators) - 1
+			prevIndex = len(ps.AvailableProjects) - 1
 		}
-		ps.SelectedGenerator = ps.AvailableGenerators[prevIndex].Name
+		ps.SelectedProject = ps.AvailableProjects[prevIndex].Name
 	} else {
-		ps.SelectedGenerator = ps.AvailableGenerators[0].Name
+		ps.SelectedProject = ps.AvailableProjects[0].Name
 	}
 }
 
@@ -217,18 +217,38 @@ func (ps *ProjectState) CycleConfiguration() {
 	}
 }
 
-// GetBuildPath returns the build directory path for the selected generator
+// SetConfiguration sets the configuration directly (used for restoring from config)
+func (ps *ProjectState) SetConfiguration(configuration string) {
+	if configuration == "Debug" || configuration == "Release" {
+		ps.Configuration = configuration
+	}
+}
+
+// SetSelectedProject sets the selected project directly (used for restoring from config)
+func (ps *ProjectState) SetSelectedProject(generator string) {
+	// Validate that the project is available
+	for _, gen := range ps.AvailableProjects {
+		if gen.Name == generator {
+			ps.SelectedProject = generator
+			return
+		}
+	}
+	// If not found in available projects, don't set it
+	// It will fall back to first available on ForceRefresh
+}
+
+// GetBuildPath returns the build directory path for the selected project
 func (ps *ProjectState) GetBuildPath() string {
-	if ps.SelectedGenerator == "" {
+	if ps.SelectedProject == "" {
 		return ""
 	}
 
-	gen := ps.SelectedGenerator
+	gen := ps.SelectedProject
 	// All projects are multi-config: Builds/<dir>/
 	return filepath.Join(ps.WorkingDirectory, "Builds", utils.GetDirectoryName(gen))
 }
 
-// GetBuildDirectory returns the build directory path for given generator and config
+// GetBuildDirectory returns the build directory path for given project and config
 func (ps *ProjectState) GetBuildDirectory(generatorName string, config string) string {
 	// All projects are multi-config: Builds/<dir>/
 	return filepath.Join(ps.WorkingDirectory, "Builds", utils.GetDirectoryName(generatorName))
@@ -295,17 +315,17 @@ func (ps *ProjectState) detectConfigurations(buildPath string) []string {
 	return configs
 }
 
-// GetSelectedBuildInfo returns the build info for the selected generator
+// GetSelectedBuildInfo returns the build info for the selected project
 func (ps *ProjectState) GetSelectedBuildInfo() BuildInfo {
-	if buildInfo, exists := ps.Builds[ps.SelectedGenerator]; exists {
+	if buildInfo, exists := ps.Builds[ps.SelectedProject]; exists {
 		return buildInfo
 	}
-	return BuildInfo{Generator: ps.SelectedGenerator, Exists: false}
+	return BuildInfo{Generator: ps.SelectedProject, Exists: false}
 }
 
-// CanGenerate returns true if we can generate the selected generator
+// CanGenerate returns true if we can generate the selected project
 func (ps *ProjectState) CanGenerate() bool {
-	return ps.SelectedGenerator != "" && ps.HasCMakeLists
+	return ps.SelectedProject != "" && ps.HasCMakeLists
 }
 
 // CanBuild returns true if we can build (build directory exists and is configured)
@@ -314,10 +334,10 @@ func (ps *ProjectState) CanBuild() bool {
 	return buildInfo.Exists && buildInfo.IsConfigured
 }
 
-// CanOpenIDE returns true if the selected generator is an IDE generator
+// CanOpenIDE returns true if the selected project is an IDE project
 func (ps *ProjectState) CanOpenIDE() bool {
-	for _, gen := range ps.AvailableGenerators {
-		if gen.Name == ps.SelectedGenerator && gen.IsIDE {
+	for _, gen := range ps.AvailableProjects {
+		if gen.Name == ps.SelectedProject && gen.IsIDE {
 			return true
 		}
 	}
@@ -331,9 +351,9 @@ func (ps *ProjectState) CanOpenEditor() bool {
 	return buildInfo.Exists
 }
 
-// GetProjectLabel returns a display-friendly generator name
+// GetProjectLabel returns a display-friendly project name
 func (ps *ProjectState) GetProjectLabel() string {
-	name := ps.SelectedGenerator
+	name := ps.SelectedProject
 
 	// Truncate long names for display
 	switch name {

@@ -29,7 +29,7 @@ func (a *Application) cmdGenerateProject(ctx context.Context) tea.Cmd {
 			a.outputBuffer.Append(line, lineType)
 		}
 
-		generator := a.projectState.SelectedGenerator
+		generator := a.projectState.SelectedProject
 		config := a.projectState.Configuration
 		projectRoot := a.projectState.WorkingDirectory
 

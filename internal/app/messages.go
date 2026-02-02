@@ -83,7 +83,7 @@ func GetFooterMessageText(msgType FooterMessageType) string {
 
 var FooterHints = map[string]string{
 	"menu_navigate":    "[g] Generate [b] Build [c] Clean [/] Config ↑↓ select",
-	"setup_gen_choose": "↑↓ choose generator │ Enter select │ ESC back",
+	"setup_gen_choose": "↑↓ choose project │ Enter select │ ESC back",
 	"ide_choose":       "↑↓ choose IDE project │ Enter select │ ESC back",
 	"editor_choose":    "↑↓ choose build dir │ Enter select │ ESC back",
 	"build_choose":     "↑↓ choose build dir │ Enter select │ ESC back",
@@ -95,7 +95,7 @@ var FooterHints = map[string]string{
 
 var ErrorMessages = map[string]string{
 	"cmake_not_found":     "CMake not found in PATH",
-	"invalid_generator":   "Invalid generator: %s",
+	"invalid_project":     "Invalid project: %s",
 	"setup_failed":        "Setup failed: %s",
 	"build_failed":        "Build failed: %s",
 	"clean_failed":        "Clean failed: %s",
@@ -105,11 +105,11 @@ var ErrorMessages = map[string]string{
 }
 
 var OutputMessages = map[string]string{
-	"detecting_project":   "Detecting project...",
-	"scanning_generators": "Scanning available generators...",
-	"setup_starting":      "Configuring CMake...",
-	"build_starting":      "Compiling project...",
-	"clean_starting":      "Removing build artifacts...",
+	"detecting_project": "Detecting project...",
+	"scanning_projects": "Scanning available projects...",
+	"setup_starting":    "Configuring CMake...",
+	"build_starting":    "Compiling project...",
+	"clean_starting":    "Removing build artifacts...",
 }
 
 // FooterHintShortcuts defines all mode-specific footer shortcuts (SSOT)

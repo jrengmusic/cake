@@ -31,7 +31,7 @@ func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 			a.outputBuffer.Append(line, lineType)
 		}
 
-		project := a.projectState.SelectedGenerator
+		project := a.projectState.SelectedProject
 		projectRoot := a.projectState.WorkingDirectory
 		buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(project))
 

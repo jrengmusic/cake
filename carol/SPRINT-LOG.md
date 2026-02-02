@@ -160,6 +160,38 @@ JOURNALIST: OpenCode (zai-coding-plan/glm-4.7)
 
 ## SPRINT HISTORY
 
+## Sprint 12 - Auto Update, Preferences, and Project Naming
+**Date:** 2026-02-02
+**Agents:** SURGEON (OpenCode - k2p5)
+
+### Summary
+Implemented auto-update with lazy scanning, full TIT-style preferences UI, and comprehensive Generator→Project rename throughout codebase. All user-facing terminology now consistently uses "Project" while internal CMake API retains "Generator" terminology.
+
+### Tasks Completed
+- **SURGEON**: Auto Update with Activity Tracking - Added `lastActivityTime` field, tracks user activity in all key handlers (menu, preferences, console), lazy auto-scan skips if user active within 30 seconds (TIT pattern)
+- **SURGEON**: Preferences UI (TIT Copy) - Created `internal/ui/preferences.go` with exact TIT implementation: `PreferenceRow` struct, `BuildPreferenceRows()`, `RenderPreferencesMenu()` with 3-column layout (emoji | label | value), `RenderPreferencesWithBanner()` for 50/50 split
+- **SURGEON**: Preference Functionality - 3 preference items: Auto-scan toggle (ON/OFF), Scan Interval (+/- 1min, =/_ 10min), Theme cycling with immediate reload; Enter/Space toggles, +/- adjusts interval, `/` or ESC returns to menu
+- **SURGEON**: Save/Restore Last Options - Added `BuildConfig` to config with `last_project` and `last_configuration`, restore on app init, save when changed
+- **SURGEON**: Generator→Project Rename - All user-facing comments, hints, labels, error messages changed from "Generator" to "Project": `SelectedProject`, `AvailableProjects`, `CycleToNextProject()`, menu labels, footer hints
+
+### Files Modified
+- `internal/app/app.go` - Added `lastActivityTime` field, lazy auto-scan logic, activity tracking in key handlers, `GetVisiblePreferenceRows()`, `TogglePreferenceAtIndex()`, interval adjustment keys (+/-)
+- `internal/app/init.go` - Restore `last_project` and `last_configuration` from config on startup
+- `internal/app/messages.go` - Changed "generator" to "project" in hints and messages
+- `internal/config/config.go` - Added `BuildConfig` struct with `last_project` and `last_configuration`, getter/setter methods
+- `internal/state/project.go` - Renamed `SelectedGenerator`→`SelectedProject`, `AvailableGenerators`→`AvailableProjects`, `CycleToNextGenerator`→`CycleToNextProject`, added `SetSelectedProject()`, `SetConfiguration()`
+- `internal/ui/menu.go` - Updated comments and hint text
+- `internal/ui/preferences.go` - NEW FILE: Complete TIT-style preferences implementation
+
+### Alignment Check
+- [x] LIFESTAR principles followed (lazy updates, immediate persistence)
+- [x] NAMING-CONVENTION.md adhered (Project for user-facing, Generator for CMake API)
+- [x] ARCHITECTURAL-MANIFESTO.md principles applied (TIT pattern matching)
+
+### Build Status
+- Build completes successfully ✓
+- All changes tested and verified
+
 ## Sprint 11 - Codebase Audit and Cleanup
 **Date:** 2026-01-29
 **Agents:** AUDITOR (Amp - Claude Sonnet 4), MACHINIST (OpenCode - glm-4.7)

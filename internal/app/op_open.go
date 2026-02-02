@@ -22,7 +22,7 @@ func (a *Application) cmdOpenIDE() tea.Cmd {
 			a.outputBuffer.Append(line, lineType)
 		}
 
-		project := a.projectState.SelectedGenerator
+		project := a.projectState.SelectedProject
 		config := a.projectState.Configuration
 		projectRoot := a.projectState.WorkingDirectory
 

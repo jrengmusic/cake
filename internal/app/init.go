@@ -25,6 +25,19 @@ func NewApplication() *Application {
 		theme, _ = ui.LoadDefaultTheme()
 	}
 
+	// Create project state and restore last chosen options from config
+	projectState := state.NewProjectState()
+	if cfg != nil {
+		// Restore last chosen project if available
+		if lastProject := cfg.LastProject(); lastProject != "" {
+			projectState.SetSelectedProject(lastProject)
+		}
+		// Restore last chosen configuration
+		if lastConfig := cfg.LastConfiguration(); lastConfig != "" {
+			projectState.SetConfiguration(lastConfig)
+		}
+	}
+
 	return &Application{
 		width:           80,
 		height:          24,
@@ -33,7 +46,7 @@ func NewApplication() *Application {
 		mode:            ModeMenu,
 		selectedIndex:   0,
 		menuItems:       []ui.MenuRow{},
-		projectState:    state.NewProjectState(),
+		projectState:    projectState,
 		config:          cfg,
 		outputBuffer:    ui.GetBuffer(),
 		footerHint:      FooterHints["menu_navigate"],

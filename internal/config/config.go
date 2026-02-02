@@ -12,6 +12,13 @@ import (
 type Config struct {
 	AutoScan   AutoScanConfig   `toml:"auto_scan"`
 	Appearance AppearanceConfig `toml:"appearance"`
+	Build      BuildConfig      `toml:"build"`
+}
+
+// BuildConfig holds build-related settings (last chosen options)
+type BuildConfig struct {
+	LastProject       string `toml:"last_project"`
+	LastConfiguration string `toml:"last_configuration"`
 }
 
 // AutoScanConfig holds auto-scan settings
@@ -34,6 +41,10 @@ func DefaultConfig() *Config {
 		},
 		Appearance: AppearanceConfig{
 			Theme: "gfx",
+		},
+		Build: BuildConfig{
+			LastProject:       "",
+			LastConfiguration: "Debug",
 		},
 	}
 }
@@ -148,5 +159,30 @@ func (c *Config) AutoScanInterval() int {
 // SetAutoScanInterval updates the auto-scan interval and saves
 func (c *Config) SetAutoScanInterval(minutes int) error {
 	c.AutoScan.IntervalMinutes = minutes
+	return Save(c)
+}
+
+// LastProject returns the last chosen project
+func (c *Config) LastProject() string {
+	return c.Build.LastProject
+}
+
+// SetLastProject updates the last chosen project and saves
+func (c *Config) SetLastProject(project string) error {
+	c.Build.LastProject = project
+	return Save(c)
+}
+
+// LastConfiguration returns the last chosen configuration (Debug/Release)
+func (c *Config) LastConfiguration() string {
+	if c.Build.LastConfiguration == "" {
+		return "Debug"
+	}
+	return c.Build.LastConfiguration
+}
+
+// SetLastConfiguration updates the last chosen configuration and saves
+func (c *Config) SetLastConfiguration(configuration string) error {
+	c.Build.LastConfiguration = configuration
 	return Save(c)
 }
