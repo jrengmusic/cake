@@ -7,16 +7,23 @@ version: "1.0"
 project:
   name: "cake"
   path: "/Users/jreng/Documents/Poems/dev/cake"
-  initialized: "2026-01-28"
+  initialized: "2026-02-02"
 
 carol:
   mode: "symlink"  # or "portable"
   version: "1.0.0"
 
 agents:
-  counselor: "Gemini"
-  engineer: "Not Assigned"
+  # Track which agents are assigned to roles
+  # PRIMARY agents
+  counselor: "Not Assigned"
   surgeon: "Not Assigned"
+  # Secondary agents
+  engineer: "Not Assigned"
+  oracle: "Not Assigned"
+  librarian: "Not Assigned"
   auditor: "Not Assigned"
   machinist: "Not Assigned"
-  journalist: "Not Assigned"
+  pathfinder: "Not Assigned"
+  researcher: "Not Assigned"
+  validator: "Not Assigned"
