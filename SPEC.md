@@ -1,4 +1,4 @@
-# cake Specification v2.0
+# cake Specification v0.1.0
 
 ## Overview
 
