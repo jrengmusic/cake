@@ -27,17 +27,17 @@ type BuildInfo struct {
 
 // ProjectState represents the current state of the CMake project
 type ProjectState struct {
-	WorkingDirectory    string
-	HasCMakeLists       bool
+	WorkingDirectory  string
+	HasCMakeLists     bool
 	AvailableProjects []Generator          // Projects detected as available on system
 	SelectedProject   string               // Currently selected project (cycled by user)
-	Builds              map[string]BuildInfo // Build state by project name (Builds/<Generator>/)
-	Configuration       string               // Current configuration: "Debug" or "Release"
-	IsPluginProject     bool
-	LastRefreshTime     time.Time
-	RefreshInterval     time.Duration
-	IsConfigured        bool     // Whether CMake has been run (CMakeCache.txt exists)
-	Configs             []string // Available configurations (Debug, Release, etc.) - for multi-config generators
+	Builds            map[string]BuildInfo // Build state by project name (Builds/<Generator>/)
+	Configuration     string               // Current configuration: "Debug" or "Release"
+	IsPluginProject   bool
+	LastRefreshTime   time.Time
+	RefreshInterval   time.Duration
+	IsConfigured      bool     // Whether CMake has been run (CMakeCache.txt exists)
+	Configs           []string // Available configurations (Debug, Release, etc.) - for multi-config generators
 }
 
 // NewProjectState creates a new ProjectState instance
@@ -48,14 +48,14 @@ func NewProjectState() *ProjectState {
 	}
 
 	ps := &ProjectState{
-		WorkingDirectory:    cwd,
-		HasCMakeLists:       false,
+		WorkingDirectory:  cwd,
+		HasCMakeLists:     false,
 		AvailableProjects: []Generator{},
 		SelectedProject:   "",
-		Builds:              make(map[string]BuildInfo),
-		Configuration:       "Debug",
-		IsPluginProject:     false,
-		RefreshInterval:     time.Second * 2,
+		Builds:            make(map[string]BuildInfo),
+		Configuration:     "Debug",
+		IsPluginProject:   false,
+		RefreshInterval:   time.Second * 2,
 	}
 
 	// Detect available projects on startup
@@ -349,6 +349,26 @@ func (ps *ProjectState) CanOpenEditor() bool {
 	buildInfo := ps.GetSelectedBuildInfo()
 	// Can open editor if build exists (even if not configured)
 	return buildInfo.Exists
+}
+
+// HasBuildsToClean returns true if Builds/ directory exists and has content
+// This is used to determine if Clean All should be available
+func (ps *ProjectState) HasBuildsToClean() bool {
+	buildsDir := filepath.Join(ps.WorkingDirectory, "Builds")
+
+	// Check if Builds directory exists
+	info, err := os.Stat(buildsDir)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+
+	// Check if Builds directory has any content
+	entries, err := os.ReadDir(buildsDir)
+	if err != nil {
+		return false
+	}
+
+	return len(entries) > 0
 }
 
 // GetProjectLabel returns a display-friendly project name

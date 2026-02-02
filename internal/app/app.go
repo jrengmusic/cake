@@ -83,6 +83,9 @@ func (a *Application) Init() tea.Cmd {
 	a.keyDispatcher.Register(ModeConsole, func(app *Application, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return app.handleOperationKeyPress(msg)
 	})
+	a.keyDispatcher.Register(ModeInvalidProject, func(app *Application, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+		return app.handleInvalidProjectKeyPress(msg)
+	})
 
 	// Start auto-scan ticker if enabled
 	if a.config != nil && a.config.IsAutoScanEnabled() {
@@ -170,7 +173,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case TickMsg:
 		if a.quitConfirmActive && time.Since(a.quitConfirmTime) > 3*time.Second {
 			a.quitConfirmActive = false
-			a.footerHint = FooterHints["menu_navigate"]
+			a.footerHint = a.GetDefaultFooterHint()
 		}
 		return a, nil
 
@@ -221,6 +224,23 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			a.footerHint = "Clean failed: " + msg.Error
 		}
+		return a, nil
+
+	case CleanAllCompleteMsg:
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
+			a.footerHint = "Operation aborted"
+			return a, nil
+		}
+		a.projectState.ForceRefresh()
+		a.menuItems = a.GenerateMenu()
+		if msg.Success {
+			a.footerHint = "All builds cleaned successfully"
+		} else {
+			a.footerHint = "Clean All failed: " + msg.Error
+		}
+		// Stay in console mode - user presses ESC to return
 		return a, nil
 
 	case OpenIDECompleteMsg:
@@ -307,6 +327,11 @@ func (a *Application) View() string {
 
 	var contentText string
 	switch a.mode {
+	case ModeInvalidProject:
+		// Not a CMake project - show "cake is a lie" banner centered
+		contentText = ui.RenderCakeLieBanner(a.sizing.ContentInnerWidth, a.sizing.ContentHeight, a.theme)
+		// Footer is handled by GetFooterContent() which checks quitConfirmActive
+		// No need to override footerText here
 	case ModeMenu:
 		contentText = a.renderMenuWithBanner()
 	case ModePreferences:
@@ -352,6 +377,8 @@ func (a *Application) handleConfirmDialogKeyPress(msg tea.KeyMsg) (tea.Model, te
 				return a.startGenerateOperation()
 			case "clean":
 				return a.startCleanOperation()
+			case "cleanAll":
+				return a.startCleanAllOperation()
 			case "regenerate":
 				return a.startRegenerateOperation()
 			}
@@ -378,6 +405,8 @@ func (a *Application) handleConfirmDialogKeyPress(msg tea.KeyMsg) (tea.Model, te
 					return a.startGenerateOperation()
 				case "clean":
 					return a.startCleanOperation()
+				case "cleanAll":
+					return a.startCleanAllOperation()
 				case "regenerate":
 					return a.startRegenerateOperation()
 				}
@@ -636,13 +665,26 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 		// Show confirmation dialog for clean (default to No for safety)
 		a.confirmDialog = ui.NewConfirmationDialogWithDefault(ui.ConfirmationConfig{
 			Title:       "Clean Build Directory",
-			Explanation: "Remove all build artifacts?",
+			Explanation: "Remove all build artifacts for " + a.projectState.SelectedProject + "?",
 			YesLabel:    "Yes",
 			NoLabel:     "No",
 			ActionID:    "clean",
 		}, a.sizing.ContentInnerWidth, &a.theme, ui.ButtonNo)
 		a.confirmDialog.Active = true
 		a.pendingOperation = "clean"
+		return true, nil
+	case "cleanAll":
+		// Show confirmation dialog for clean all (default to No for safety)
+		buildsDir := "Builds/"
+		a.confirmDialog = ui.NewConfirmationDialogWithDefault(ui.ConfirmationConfig{
+			Title:       "Clean All Projects",
+			Explanation: "This will permanently delete the entire '" + buildsDir + "' directory, removing ALL build artifacts for ALL projects. This action cannot be undone.",
+			YesLabel:    "Yes, Delete All",
+			NoLabel:     "Cancel",
+			ActionID:    "cleanAll",
+		}, a.sizing.ContentInnerWidth, &a.theme, ui.ButtonNo)
+		a.confirmDialog.Active = true
+		a.pendingOperation = "cleanAll"
 		return true, nil
 	case "openIde":
 		_, cmd := a.startOpenIDEOperation()
@@ -710,6 +752,8 @@ func (a *Application) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return a.handlePreferencesKeyPress(msg)
 	case ModeConsole:
 		return a.handleOperationKeyPress(msg)
+	case ModeInvalidProject:
+		return a.handleInvalidProjectKeyPress(msg)
 	}
 	return a, nil
 }
@@ -824,9 +868,9 @@ func (a *Application) handleMenuKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, nil
-	case "c", "C":
-		// Clean - jump to row and execute
-		idx := a.GetVisibleIndex("clean")
+	case "ctrl+k":
+		// Clean All - jump to row and execute
+		idx := a.GetVisibleIndex("cleanAll")
 		if idx >= 0 {
 			a.selectedIndex = idx
 			handled, cmd := a.ToggleRowAtIndex(idx)
@@ -1019,6 +1063,19 @@ func (a *Application) handleCtrlC() (tea.Model, tea.Cmd) {
 	return a, tea.Tick(3*time.Second, func(t time.Time) tea.Msg {
 		return TickMsg(t)
 	})
+}
+
+// handleInvalidProjectKeyPress handles keys in invalid project mode (no CMakeLists.txt)
+func (a *Application) handleInvalidProjectKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "q", "Q":
+		return a, tea.Quit
+	case "esc":
+		return a, tea.Quit
+	case "ctrl+c":
+		return a.handleCtrlC()
+	}
+	return a, nil
 }
 
 // cmdRefreshConsole sends periodic refresh messages while async operation is active

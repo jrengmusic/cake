@@ -160,6 +160,45 @@ JOURNALIST: OpenCode (zai-coding-plan/glm-4.7)
 
 ## SPRINT HISTORY
 
+## Sprint 13 - Menu Rendering, Clean All, and Invalid Project Handling
+**Date:** 2026-02-02
+**Agents:** SURGEON (OpenCode - k2p5)
+
+### Summary
+Implemented always-visible menu with dimmed unavailable options, added Clean All operation, created invalid project mode with "cake is a lie" banner, fixed Ctrl+C handling consistency, and added version display in header.
+
+### Tasks Completed
+- **SURGEON**: Menu Rendering Fix - All menu items always visible, unavailable options dimmed and not selectable, Clean shortcut changed from 'c' to 'k', added Clean All with 'ctrl+k' shortcut
+- **SURGEON**: Clean All Operation - Removes entire Builds/ directory, confirmation dialog with warning message, only available when Builds/ has content, stays in console when finished
+- **SURGEON**: Invalid Project Mode - Detects missing CMakeLists.txt, shows braille cake art banner centered, footer shows "The cake is a lie", only q/esc/ctrl+c to quit
+- **SURGEON**: Ctrl+C Consistency - Fixed footer message timeout to use SSOT GetDefaultFooterHint(), proper key handling for all modes via dispatcher
+- **SURGEON**: Header Improvements - Added cake emoji (🍰) before project name, fixed spacing (1 char instead of 2), added version number (v0.1.0) right-aligned below separator
+- **SURGEON**: Shortcut Styling - Shortcuts now use AccentTextColor + Bold (TIT pattern), right-aligned display with ShortcutLabel support
+
+### Files Modified
+- `internal/ui/menu.go` - Always-visible menu rows, IsSelectable for unavailable items, dimmed styling, ShortcutLabel field, Clean All menu item
+- `internal/ui/header.go` - Cake emoji, fixed spacing, version display
+- `internal/ui/sizing.go` - HeaderHeight increased from 3 to 4
+- `internal/ui/cake_lie.go` - NEW: Braille cake art banner, invalid project footer
+- `internal/app/init.go` - ForceRefresh to detect CMakeLists.txt, ModeInvalidProject initialization
+- `internal/app/modes.go` - ModeInvalidProject enum value
+- `internal/app/footer.go` - GetDefaultFooterHint() SSOT function, ModeInvalidProject footer case
+- `internal/app/app.go` - handleInvalidProjectKeyPress(), Clean All operation handling
+- `internal/app/op_clean_all.go` - NEW: Clean All operation implementation
+- `internal/app/messages.go` - CleanAllCompleteMsg
+- `internal/config/config.go` - BuildConfig with last_project/last_configuration
+- `internal/state/project.go` - HasBuildsToClean(), SetSelectedProject(), SetConfiguration()
+- `internal/constants.go` - NEW: AppVersion constant
+
+### Alignment Check
+- [x] LIFESTAR principles followed (SSOT footer messages, consistent patterns)
+- [x] NAMING-CONVENTION.md adhered
+- [x] ARCHITECTURAL-MANIFESTO.md principles applied (TIT pattern matching)
+- [x] Key dispatcher pattern preserved for all modes
+
+### Build Status
+- Build completes successfully ✓
+
 ## Sprint 12 - Auto Update, Preferences, and Project Naming
 **Date:** 2026-02-02
 **Agents:** SURGEON (OpenCode - k2p5)

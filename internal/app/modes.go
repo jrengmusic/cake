@@ -3,7 +3,8 @@ package app
 type AppMode int
 
 const (
-	ModeMenu AppMode = iota
+	ModeInvalidProject AppMode = iota // Not a CMake project - show "cake is a lie"
+	ModeMenu
 	ModePreferences
 	ModeConsole
 )
@@ -16,6 +17,12 @@ type ModeMetadata struct {
 }
 
 var modeDescriptions = map[AppMode]ModeMetadata{
+	ModeInvalidProject: {
+		Name:         "invalid",
+		Description:  "Not a CMake project",
+		AcceptsInput: true,
+		IsAsync:      false,
+	},
 	ModeMenu: {
 		Name:         "menu",
 		Description:  "Main preference menu",

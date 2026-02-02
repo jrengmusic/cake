@@ -3,7 +3,7 @@ package ui
 const (
 	MinWidth         = 69
 	MinHeight        = 19
-	HeaderHeight     = 3
+	HeaderHeight     = 4
 	FooterHeight     = 1
 	MinContentHeight = 4
 	HorizontalMargin = 2

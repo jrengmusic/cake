@@ -22,6 +22,14 @@ func (a *Application) GetFooterContent() string {
 
 	// Priority 2: Mode-specific footer
 	switch a.mode {
+	case ModeInvalidProject:
+		// Invalid project mode: show "The cake is a lie" centered
+		return ui.RenderFooterOverride(
+			"The cake is a lie",
+			width,
+			&a.theme,
+		)
+
 	case ModeMenu:
 		// Menu mode: show selected menu item's hint/description
 		return a.getMenuFooter(width)
@@ -71,6 +79,26 @@ func (a *Application) getConsoleFooter(width int) string {
 	rightContent := a.computeConsoleScrollStatus()
 
 	return ui.RenderFooter(shortcuts, width, &a.theme, rightContent)
+}
+
+// GetDefaultFooterHint returns the default footer hint for the current mode
+// Used when resetting footer after timeout or operation completion
+func (a *Application) GetDefaultFooterHint() string {
+	switch a.mode {
+	case ModeInvalidProject:
+		return "The cake is a lie"
+	case ModeMenu:
+		return FooterHints["menu_navigate"]
+	case ModePreferences:
+		return "↑↓ navigate │ Enter change │ / back"
+	case ModeConsole:
+		if a.asyncState.IsActive() {
+			return "Operation in progress..."
+		}
+		return "Press ESC to return to menu"
+	default:
+		return ""
+	}
 }
 
 // computeConsoleScrollStatus returns the right-side scroll status for console mode

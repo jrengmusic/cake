@@ -3,6 +3,8 @@ package ui
 import (
 	"strings"
 
+	"cake/internal"
+
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -25,18 +27,19 @@ type HeaderState struct {
 func RenderHeaderInfo(sizing DynamicSizing, theme Theme, state HeaderState) string {
 	totalWidth := sizing.HeaderInnerWidth
 
-	// === LINE 1: Project Name ===
-	// "    PROJECT" - 4 spaces for alignment, uppercase
+	// === LINE 1: Project Name with cake emoji ===
+	// "🍰 PROJECT" - cake emoji, 1 space, uppercase project name
 	projectLine := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(theme.LabelTextColor)).
-		Render("    " + strings.ToUpper(state.ProjectName))
+		Render("🍰 " + strings.ToUpper(state.ProjectName))
 
-	// === LINE 2: CWD with emoji ===
+	// === LINE 2: CWD with folder emoji ===
+	// "📂 CWD" - folder emoji, 1 space, path
 	cwdLine := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color(theme.CwdTextColor)).
-		Render("📂  " + state.CWD)
+		Render("📂 " + state.CWD)
 
 	// === LINE 3: Separator ===
 	separatorLine := lipgloss.NewStyle().
@@ -44,8 +47,16 @@ func RenderHeaderInfo(sizing DynamicSizing, theme Theme, state HeaderState) stri
 		Foreground(lipgloss.Color(theme.SeparatorColor)).
 		Render(strings.Repeat("─", totalWidth))
 
-	// Combine all 3 lines
-	result := lipgloss.JoinVertical(lipgloss.Left, projectLine, cwdLine, separatorLine)
+	// === LINE 4: Version (right-aligned, below separator, TIT pattern) ===
+	versionText := internal.AppVersion
+	versionLine := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(theme.DimmedTextColor)).
+		Align(lipgloss.Right).
+		Width(totalWidth).
+		Render(versionText)
+
+	// Combine all 4 lines
+	result := lipgloss.JoinVertical(lipgloss.Left, projectLine, cwdLine, separatorLine, versionLine)
 
 	return result
 }

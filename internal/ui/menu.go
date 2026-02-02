@@ -7,107 +7,129 @@ import (
 )
 
 // MenuRow represents a single menu row
-// Fixed 7 rows: [0]Project [1]Regenerate [2]OpenIDE [3]Separator [4]Configuration [5]Build [6]Clean
+// Fixed 8 rows: [0]Project [1]Regenerate [2]OpenIDE [3]Separator [4]Configuration [5]Build [6]Clean [7]CleanAll
 type MenuRow struct {
-	ID           string // "project", "regenerate", "openIde", "separator", "configuration", "build", "clean"
-	Shortcut     string // "", "g", "o", "", "", "b", "c"
-	Emoji        string // "⚙️", "🚀", "📂", "", "🏗️", "🔨", "🧹"
-	Label        string // "Project", "Regenerate", "Open IDE", "", "Configuration", "Build", "Clean"
-	Value        string // "Xcode", "", "", "", "Debug", "", ""
-	Visible      bool   // true/false based on conditions
-	IsAction     bool   // false for toggles, true for actions
-	IsSelectable bool   // false for separator
-	Hint         string // Footer hint/description for this row
+	ID            string // "project", "regenerate", "openIde", "separator", "configuration", "build", "clean", "cleanAll"
+	Shortcut      string // Actual key for handler: "", "g", "o", "", "", "b", "k", "ctrl+k"
+	ShortcutLabel string // Display label (right-aligned): "", "g", "o", "", "", "b", "k", "ctrl + k"
+	Emoji         string // "⚙️", "🚀", "📂", "", "🏗️", "🔨", "🧹", "💥"
+	Label         string // "Project", "Regenerate", "Open IDE", "", "Configuration", "Build", "Clean", "Clean All"
+	Value         string // "Xcode", "", "", "", "Debug", "", "", ""
+	Visible       bool   // true/false based on conditions
+	IsAction      bool   // false for toggles, true for actions
+	IsSelectable  bool   // false for separator
+	Hint          string // Footer hint/description for this row
 }
 
-// GenerateMenuRows returns exactly 7 rows (used by app.go)
-func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool, canClean bool, hasBuild bool) []MenuRow {
+// GenerateMenuRows returns exactly 8 rows (used by app.go)
+// All rows always visible - unavailable options are dimmed and not selectable
+func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool, canClean bool, hasBuild bool, hasBuildsToClean bool) []MenuRow {
 	return []MenuRow{
 		{
-			ID:           "project",
-			Shortcut:     "",
-			Emoji:        "⚙️",
-			Label:        "Project",
-			Value:        projectLabel,
-			Visible:      true,
-			IsAction:     false,
-			IsSelectable: true,
-			Hint:         "Select project type (Xcode, Ninja, etc.)",
+			ID:            "project",
+			Shortcut:      "",
+			ShortcutLabel: "",
+			Emoji:         "⚙️",
+			Label:         "Project",
+			Value:         projectLabel,
+			Visible:       true,
+			IsAction:      false,
+			IsSelectable:  true,
+			Hint:          "Select project type (Xcode, Ninja, etc.)",
 		},
 		{
-			ID:           "regenerate",
-			Shortcut:     "g",
-			Emoji:        "🚀",
-			Label:        map[bool]string{true: "Regenerate", false: "Generate"}[hasBuild],
-			Value:        "",
-			Visible:      true,
-			IsAction:     true,
-			IsSelectable: true,
-			Hint:         map[bool]string{true: "Re-run CMake configuration", false: "Run initial CMake configuration"}[hasBuild],
+			ID:            "regenerate",
+			Shortcut:      "g",
+			ShortcutLabel: "g",
+			Emoji:         "🚀",
+			Label:         map[bool]string{true: "Regenerate", false: "Generate"}[hasBuild],
+			Value:         "",
+			Visible:       true,
+			IsAction:      true,
+			IsSelectable:  true,
+			Hint:          map[bool]string{true: "Re-run CMake configuration", false: "Run initial CMake configuration"}[hasBuild],
 		},
 		{
-			ID:           "openIde",
-			Shortcut:     "o",
-			Emoji:        "📂",
-			Label:        "Open IDE",
-			Value:        "",
-			Visible:      canOpenIDE,
-			IsAction:     true,
-			IsSelectable: true,
-			Hint:         "Launch IDE for this project",
+			ID:            "openIde",
+			Shortcut:      "o",
+			ShortcutLabel: "o",
+			Emoji:         "📂",
+			Label:         "Open IDE",
+			Value:         "",
+			Visible:       true,
+			IsAction:      true,
+			IsSelectable:  canOpenIDE, // Not selectable when unavailable
+			Hint:          "Launch IDE for this project",
 		},
 		{
-			ID:           "separator",
-			Shortcut:     "",
-			Emoji:        "",
-			Label:        "",
-			Value:        "",
-			Visible:      true,
-			IsAction:     false,
-			IsSelectable: false,
-			Hint:         "",
+			ID:            "separator",
+			Shortcut:      "",
+			ShortcutLabel: "",
+			Emoji:         "",
+			Label:         "",
+			Value:         "",
+			Visible:       true,
+			IsAction:      false,
+			IsSelectable:  false,
+			Hint:          "",
 		},
 		{
-			ID:           "configuration",
-			Shortcut:     "",
-			Emoji:        "🏗️",
-			Label:        "Configuration",
-			Value:        configuration,
-			Visible:      true,
-			IsAction:     false,
-			IsSelectable: true,
-			Hint:         "Select build configuration (Debug, Release, etc.)",
+			ID:            "configuration",
+			Shortcut:      "",
+			ShortcutLabel: "",
+			Emoji:         "🏗️",
+			Label:         "Configuration",
+			Value:         configuration,
+			Visible:       true,
+			IsAction:      false,
+			IsSelectable:  true,
+			Hint:          "Select build configuration (Debug, Release, etc.)",
 		},
 		{
-			ID:           "build",
-			Shortcut:     "b",
-			Emoji:        "🔨",
-			Label:        "Build",
-			Value:        "",
-			Visible:      true,
-			IsAction:     true,
-			IsSelectable: true,
-			Hint:         "Build the project",
+			ID:            "build",
+			Shortcut:      "b",
+			ShortcutLabel: "b",
+			Emoji:         "🔨",
+			Label:         "Build",
+			Value:         "",
+			Visible:       true,
+			IsAction:      true,
+			IsSelectable:  true,
+			Hint:          "Build the project",
 		},
 		{
-			ID:           "clean",
-			Shortcut:     "c",
-			Emoji:        "🧹",
-			Label:        "Clean",
-			Value:        "",
-			Visible:      canClean,
-			IsAction:     true,
-			IsSelectable: true,
-			Hint:         "Remove build artifacts",
+			ID:            "clean",
+			Shortcut:      "k",
+			ShortcutLabel: "k",
+			Emoji:         "🧹",
+			Label:         "Clean",
+			Value:         "",
+			Visible:       true,
+			IsAction:      true,
+			IsSelectable:  canClean, // Not selectable when unavailable
+			Hint:          "Remove build artifacts for current project",
+		},
+		{
+			ID:            "cleanAll",
+			Shortcut:      "ctrl+k",
+			ShortcutLabel: "ctrl + k",
+			Emoji:         "💥",
+			Label:         "Clean All",
+			Value:         "",
+			Visible:       true,
+			IsAction:      true,
+			IsSelectable:  hasBuildsToClean, // Not selectable when no builds to clean
+			Hint:          "Remove entire Builds/ directory (all projects)",
 		},
 	}
 }
 
 // RenderCakeMenu renders cake menu with shortcut column
-// Columns: SHORTCUT(3) | EMOJI(3) | LABEL(18) | VALUE(14)
+// Columns: SHORTCUT(10) | EMOJI(3) | LABEL(18) | VALUE(14)
+// Shortcut column is wider to accommodate "ctrl + k" style labels
 func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeight int, contentWidth int) string {
-	// Column widths
-	shortcutColWidth := 3
+	// Column widths - shortcut column wider for "ctrl + k" style labels
+	shortcutColWidth := 10
 	emojiColWidth := 3
 	labelColWidth := 18
 	valueColWidth := 14
@@ -126,12 +148,6 @@ func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeigh
 	visibleSelectableIndex := 0 // Tracks only visible AND selectable items
 
 	for _, row := range rows {
-		// Handle hidden rows - render empty line, don't count in navigation
-		if !row.Visible {
-			lines = append(lines, strings.Repeat(" ", menuBoxWidth))
-			continue // Don't increment visibleSelectableIndex
-		}
-
 		// Handle separator - render it, but don't count in navigation
 		if row.ID == "separator" {
 			sepLine := lipgloss.NewStyle().
@@ -141,18 +157,22 @@ func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeigh
 			continue // Don't increment visibleSelectableIndex
 		}
 
-		// This row is visible and selectable
-		// Check if it's selected
-		isSelected := visibleSelectableIndex == selectedIndex
+		// This row is visible - check if it's selectable and selected
+		isSelectable := row.IsSelectable
+		isSelected := isSelectable && visibleSelectableIndex == selectedIndex
 
-		// Column 1: SHORTCUT (left-aligned)
-		shortcutStr := row.Shortcut
-		shortcutW := lipgloss.Width(shortcutStr)
+		// Column 1: SHORTCUT (right-aligned, using ShortcutLabel for display)
+		shortcutDisplay := row.ShortcutLabel
+		if shortcutDisplay == "" {
+			shortcutDisplay = row.Shortcut
+		}
+		shortcutW := lipgloss.Width(shortcutDisplay)
 		shortcutPad := shortcutColWidth - shortcutW
 		if shortcutPad < 0 {
 			shortcutPad = 0
 		}
-		shortcutCol := shortcutStr + strings.Repeat(" ", shortcutPad)
+		// Right-align the shortcut label
+		shortcutCol := strings.Repeat(" ", shortcutPad) + shortcutDisplay + " "
 
 		// Column 2: EMOJI (center-aligned)
 		emojiStr := row.Emoji
@@ -189,9 +209,10 @@ func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeigh
 		var styledLine string
 
 		if isSelected {
-			// Selected: highlight label+value
+			// Selected: highlight label+value, shortcut uses accent color + bold (TIT pattern)
 			shortcutStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.LabelTextColor))
+				Foreground(lipgloss.Color(theme.AccentTextColor)).
+				Bold(true)
 			emojiStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.LabelTextColor))
 			labelStyle := lipgloss.NewStyle().
@@ -206,10 +227,16 @@ func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeigh
 				emojiStyle.Render(emojiCol) +
 				labelStyle.Render(labelCol) +
 				valueStyle.Render(valueCol)
+		} else if !isSelectable {
+			// Unselectable (unavailable): dimmed
+			dimStyle := lipgloss.NewStyle().
+				Foreground(lipgloss.Color(theme.DimmedTextColor))
+			styledLine = dimStyle.Render(shortcutCol + emojiCol + labelCol + valueCol)
 		} else {
-			// Normal
+			// Normal selectable row - shortcut uses accent color + bold (TIT pattern)
 			shortcutStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.LabelTextColor))
+				Foreground(lipgloss.Color(theme.AccentTextColor)).
+				Bold(true)
 			emojiStyle := lipgloss.NewStyle().
 				Foreground(lipgloss.Color(theme.LabelTextColor))
 			labelStyle := lipgloss.NewStyle().
@@ -223,7 +250,9 @@ func RenderCakeMenu(rows []MenuRow, selectedIndex int, theme Theme, contentHeigh
 		}
 
 		lines = append(lines, styledLine)
-		visibleSelectableIndex++ // Only increment for visible, selectable rows
+		if isSelectable {
+			visibleSelectableIndex++ // Only increment for selectable rows
+		}
 	}
 
 	// Center vertically and horizontally

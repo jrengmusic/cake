@@ -24,6 +24,11 @@ type CleanCompleteMsg struct {
 	Error   string
 }
 
+type CleanAllCompleteMsg struct {
+	Success bool
+	Error   string
+}
+
 type OpenIDECompleteMsg struct {
 	Success bool
 	Error   string
