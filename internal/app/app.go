@@ -56,7 +56,8 @@ type Application struct {
 
 	confirmDialog *ui.ConfirmationDialog // Confirmation dialog (TIT pattern)
 
-	pendingOperation string // Track operation to execute after confirmation
+	pendingOperation   string // Track operation to execute after confirmation
+	buildAfterGenerate bool   // Chain build after generate when project not yet generated
 
 	lastActivityTime time.Time // Track last user activity for lazy auto-scan (TIT pattern)
 }
@@ -184,14 +185,22 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.asyncState.End()
 		if a.asyncState.IsAborted() {
 			a.asyncState.ClearAborted()
+			a.buildAfterGenerate = false
 			a.footerHint = "Operation aborted"
 			return a, nil
 		}
 		a.projectState.ForceRefresh()
 		a.menuItems = a.GenerateMenu()
 		if msg.Success {
+			// If build was requested but project wasn't generated yet, chain into build now
+			if a.buildAfterGenerate {
+				a.buildAfterGenerate = false
+				_, cmd := a.startBuildOperation()
+				return a, cmd
+			}
 			a.footerHint = GetFooterMessageText(MessageOperationComplete)
 		} else {
+			a.buildAfterGenerate = false
 			a.footerHint = "Generate failed: " + msg.Error
 		}
 		return a, nil
@@ -695,6 +704,12 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 		a.menuItems = a.GenerateMenu()
 		return true, nil
 	case "build":
+		// If project hasn't been generated yet, generate first then build automatically
+		if !a.projectState.CanBuild() {
+			a.buildAfterGenerate = true
+			_, cmd := a.startGenerateOperation()
+			return true, cmd
+		}
 		_, cmd := a.startBuildOperation()
 		return true, cmd
 	}
