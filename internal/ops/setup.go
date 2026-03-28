@@ -14,7 +14,7 @@ type SetupResult struct {
 	Error   string
 }
 
-func ExecuteSetupProject(ctx context.Context, workingDir, generator, config string, outputCallback func(string, ui.OutputLineType)) SetupResult {
+func ExecuteSetupProject(ctx context.Context, workingDir, generator, config string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) SetupResult {
 	if workingDir == "" {
 		return SetupResult{Success: false, Error: "Working directory is empty"}
 	}
@@ -31,15 +31,19 @@ func ExecuteSetupProject(ctx context.Context, workingDir, generator, config stri
 		"-B", buildDir,
 	}
 
-	outputCallback("Running: cmake "+strings.Join(args, " "), ui.TypeInfo)
-	outputCallback("", ui.TypeStdout)
+	appendCallback("Running: cmake "+strings.Join(args, " "), ui.TypeInfo)
+	appendCallback("", ui.TypeStdout)
 
-	cmd := exec.CommandContext(ctx, "cmake", args...)
+	cmakePath := utils.FindExecutableInEnv("cmake", vsEnv)
+	cmd := exec.CommandContext(ctx, cmakePath, args...)
 	cmd.Dir = workingDir
+	if len(vsEnv) > 0 {
+		cmd.Env = vsEnv
+	}
 
 	// Stream stdout/stderr using helper
-	if err := utils.StreamCommand(cmd, outputCallback); err != nil {
-		outputCallback("ERROR: "+err.Error(), ui.TypeStderr)
+	if err := utils.StreamCommand(cmd, appendCallback, replaceCallback); err != nil {
+		appendCallback("ERROR: "+err.Error(), ui.TypeStderr)
 		return SetupResult{Success: false, Error: err.Error()}
 	}
 
@@ -51,12 +55,12 @@ func ExecuteSetupProject(ctx context.Context, workingDir, generator, config stri
 	}
 
 	if err != nil {
-		outputCallback("", ui.TypeStdout)
-		outputCallback("ERROR: "+err.Error(), ui.TypeStderr)
+		appendCallback("", ui.TypeStdout)
+		appendCallback("ERROR: "+err.Error(), ui.TypeStderr)
 		return SetupResult{Success: false, Error: err.Error()}
 	}
 
-	outputCallback("", ui.TypeStdout)
-	outputCallback("Setup completed successfully: "+buildDir, ui.TypeStatus)
+	appendCallback("", ui.TypeStdout)
+	appendCallback("Setup completed successfully: "+buildDir, ui.TypeStatus)
 	return SetupResult{Success: true}
 }

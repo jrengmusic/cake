@@ -2,7 +2,6 @@ package app
 
 import (
 	"cake/internal/ops"
-	"cake/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -19,9 +18,7 @@ func (a *Application) startBuildOperation() (tea.Model, tea.Cmd) {
 // cmdBuildProject executes the build command
 func (a *Application) cmdBuildProject() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, replaceCallback := a.outputCallbacks()
 
 		project := a.projectState.SelectedProject
 		config := a.projectState.Configuration
@@ -31,7 +28,9 @@ func (a *Application) cmdBuildProject() tea.Cmd {
 			project,
 			config,
 			projectRoot,
-			outputCallback,
+			a.vsEnv,
+			appendCallback,
+			replaceCallback,
 		)
 
 		return BuildCompleteMsg{

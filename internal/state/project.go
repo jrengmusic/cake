@@ -128,14 +128,10 @@ func (ps *ProjectState) DetectAvailableProjects() {
 
 	// Check Visual Studio (Windows only)
 	if runtime.GOOS == "windows" {
-		// Check for Visual Studio via vswhere or cmake generator availability
-		if ps.checkVSGeneratorAvailable() {
+		vsGenerators := ps.checkVSGeneratorAvailable()
+		for _, vsGen := range vsGenerators {
 			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
-				Name:  "Visual Studio 18 2026",
-				IsIDE: true,
-			})
-			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
-				Name:  "Visual Studio 17 2022",
+				Name:  vsGen,
 				IsIDE: true,
 			})
 		}
@@ -148,15 +144,9 @@ func (ps *ProjectState) checkCommandExists(cmd string) bool {
 	return err == nil
 }
 
-// checkVSGeneratorAvailable checks if Visual Studio generators are available
-func (ps *ProjectState) checkVSGeneratorAvailable() bool {
-	// Try to run cmake with --help to list projects
-	cmd := exec.Command("cmake", "--help")
-	output, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	return strings.Contains(string(output), "Visual Studio")
+// checkVSGeneratorAvailable returns generator strings for all installed VS versions
+func (ps *ProjectState) checkVSGeneratorAvailable() []string {
+	return utils.DetectInstalledVSVersions()
 }
 
 // CycleToNextProject advances to the next available project

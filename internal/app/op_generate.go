@@ -2,7 +2,6 @@ package app
 
 import (
 	"cake/internal/ops"
-	"cake/internal/ui"
 	"context"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -25,9 +24,7 @@ func (a *Application) startGenerateOperation() (tea.Model, tea.Cmd) {
 // cmdGenerateProject executes the generate/regenerate command
 func (a *Application) cmdGenerateProject(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, replaceCallback := a.outputCallbacks()
 
 		generator := a.projectState.SelectedProject
 		config := a.projectState.Configuration
@@ -38,7 +35,9 @@ func (a *Application) cmdGenerateProject(ctx context.Context) tea.Cmd {
 			projectRoot,
 			generator,
 			config,
-			outputCallback,
+			a.vsEnv,
+			appendCallback,
+			replaceCallback,
 		)
 
 		return GenerateCompleteMsg{

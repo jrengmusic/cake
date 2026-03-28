@@ -2,7 +2,6 @@ package app
 
 import (
 	"cake/internal/ops"
-	"cake/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -18,9 +17,7 @@ func (a *Application) startOpenIDEOperation() (tea.Model, tea.Cmd) {
 // cmdOpenIDE executes the open IDE command
 func (a *Application) cmdOpenIDE() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, _ := a.outputCallbacks()
 
 		project := a.projectState.SelectedProject
 		config := a.projectState.Configuration
@@ -30,7 +27,7 @@ func (a *Application) cmdOpenIDE() tea.Cmd {
 			project,
 			config,
 			projectRoot,
-			outputCallback,
+			appendCallback,
 		)
 
 		return OpenIDECompleteMsg{
@@ -52,13 +49,11 @@ func (a *Application) startOpenEditorOperation() (tea.Model, tea.Cmd) {
 // cmdOpenEditor executes the open editor command
 func (a *Application) cmdOpenEditor() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, _ := a.outputCallbacks()
 
 		buildPath := a.projectState.GetBuildPath()
 
-		result := ops.ExecuteOpenEditor(buildPath, outputCallback)
+		result := ops.ExecuteOpenEditor(buildPath, appendCallback)
 
 		return OpenEditorCompleteMsg{
 			Success: result.Success,

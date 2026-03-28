@@ -27,31 +27,29 @@ func (a *Application) startRegenerateOperation() (tea.Model, tea.Cmd) {
 
 func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, replaceCallback := a.outputCallbacks()
 
 		project := a.projectState.SelectedProject
 		projectRoot := a.projectState.WorkingDirectory
 		buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(project))
 
 		// Step 1: Clean
-		outputCallback("=== Step 1: Clean ===", ui.TypeInfo)
-		outputCallback("", ui.TypeStdout)
+		appendCallback("=== Step 1: Clean ===", ui.TypeInfo)
+		appendCallback("", ui.TypeStdout)
 
 		if _, err := os.Stat(buildDir); err == nil {
-			outputCallback("Removing: "+buildDir, ui.TypeStdout)
+			appendCallback("Removing: "+buildDir, ui.TypeStdout)
 			if err := os.RemoveAll(buildDir); err != nil {
-				outputCallback("ERROR: Clean failed", ui.TypeStderr)
+				appendCallback("ERROR: Clean failed", ui.TypeStderr)
 				return RegenerateCompleteMsg{Success: false, Error: err.Error()}
 			}
-			outputCallback("Clean completed", ui.TypeStatus)
+			appendCallback("Clean completed", ui.TypeStatus)
 		} else {
-			outputCallback("No build directory to clean", ui.TypeWarning)
+			appendCallback("No build directory to clean", ui.TypeWarning)
 		}
 
-		outputCallback("", ui.TypeStdout)
-		outputCallback("=== Step 2: Generate ===", ui.TypeInfo)
+		appendCallback("", ui.TypeStdout)
+		appendCallback("=== Step 2: Generate ===", ui.TypeInfo)
 
 		// Step 2: Generate
 		result := ops.ExecuteSetupProject(
@@ -59,7 +57,9 @@ func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 			projectRoot,
 			project,
 			"",
-			outputCallback,
+			a.vsEnv,
+			appendCallback,
+			replaceCallback,
 		)
 
 		return RegenerateCompleteMsg{

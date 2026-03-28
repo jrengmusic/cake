@@ -60,6 +60,8 @@ type Application struct {
 	buildAfterGenerate bool   // Chain build after generate when project not yet generated
 
 	lastActivityTime time.Time // Track last user activity for lazy auto-scan (TIT pattern)
+
+	vsEnv []string // Captured Visual Studio environment (Windows only)
 }
 
 func (a *Application) Init() tea.Cmd {
@@ -290,7 +292,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Force re-render to display updated console output
 		// If operation still active, schedule next refresh tick
 		if a.asyncState.IsActive() {
-			return a, tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+			return a, tea.Tick(CacheRefreshInterval, func(t time.Time) tea.Msg {
 				return OutputRefreshMsg{}
 			})
 		}
@@ -1096,7 +1098,19 @@ func (a *Application) handleInvalidProjectKeyPress(msg tea.KeyMsg) (tea.Model, t
 // cmdRefreshConsole sends periodic refresh messages while async operation is active
 // This forces UI re-renders to display streaming output in real-time
 func (a *Application) cmdRefreshConsole() tea.Cmd {
-	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+	return tea.Tick(CacheRefreshInterval, func(t time.Time) tea.Msg {
 		return OutputRefreshMsg{}
 	})
+}
+
+// outputCallbacks returns the standard append and replace callbacks for streaming operations.
+// Append adds a new line to the buffer. Replace overwrites the last line (for progress output).
+func (a *Application) outputCallbacks() (func(string, ui.OutputLineType), func(string, ui.OutputLineType)) {
+	appendFn := func(line string, lineType ui.OutputLineType) {
+		a.outputBuffer.Append(line, lineType)
+	}
+	replaceFn := func(line string, lineType ui.OutputLineType) {
+		a.outputBuffer.ReplaceLast(line, lineType)
+	}
+	return appendFn, replaceFn
 }

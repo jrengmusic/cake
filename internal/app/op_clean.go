@@ -2,7 +2,6 @@ package app
 
 import (
 	"cake/internal/ops"
-	"cake/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -19,9 +18,7 @@ func (a *Application) startCleanOperation() (tea.Model, tea.Cmd) {
 // cmdCleanProject executes the clean command
 func (a *Application) cmdCleanProject() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, _ := a.outputCallbacks()
 
 		project := a.projectState.SelectedProject
 		config := a.projectState.Configuration
@@ -31,7 +28,7 @@ func (a *Application) cmdCleanProject() tea.Cmd {
 			project,
 			config,
 			projectRoot,
-			outputCallback,
+			appendCallback,
 		)
 
 		return CleanCompleteMsg{

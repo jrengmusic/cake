@@ -22,30 +22,28 @@ func (a *Application) startCleanAllOperation() (tea.Model, tea.Cmd) {
 // cmdCleanAllProject executes the clean all command (removes entire Builds/ directory)
 func (a *Application) cmdCleanAllProject() tea.Cmd {
 	return func() tea.Msg {
-		outputCallback := func(line string, lineType ui.OutputLineType) {
-			a.outputBuffer.Append(line, lineType)
-		}
+		appendCallback, _ := a.outputCallbacks()
 
 		buildsDir := filepath.Join(a.projectState.WorkingDirectory, "Builds")
 
-		outputCallback("", ui.TypeStdout)
-		outputCallback("Cleaning all projects...", ui.TypeInfo)
-		outputCallback("Target: "+buildsDir, ui.TypeStdout)
-		outputCallback("", ui.TypeStdout)
+		appendCallback("", ui.TypeStdout)
+		appendCallback("Cleaning all projects...", ui.TypeInfo)
+		appendCallback("Target: "+buildsDir, ui.TypeStdout)
+		appendCallback("", ui.TypeStdout)
 
 		// Remove the entire Builds directory
 		err := os.RemoveAll(buildsDir)
 		if err != nil {
-			outputCallback("Error: Failed to remove Builds directory: "+err.Error(), ui.TypeStderr)
+			appendCallback("Error: Failed to remove Builds directory: "+err.Error(), ui.TypeStderr)
 			return CleanAllCompleteMsg{
 				Success: false,
 				Error:   err.Error(),
 			}
 		}
 
-		outputCallback("✓ All build artifacts removed successfully", ui.TypeInfo)
-		outputCallback("", ui.TypeStdout)
-		outputCallback("Press ESC to return to menu", ui.TypeInfo)
+		appendCallback("✓ All build artifacts removed successfully", ui.TypeInfo)
+		appendCallback("", ui.TypeStdout)
+		appendCallback("Press ESC to return to menu", ui.TypeInfo)
 
 		return CleanAllCompleteMsg{
 			Success: true,

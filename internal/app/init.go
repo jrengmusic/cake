@@ -4,6 +4,10 @@ import (
 	"cake/internal/config"
 	"cake/internal/state"
 	"cake/internal/ui"
+	"cake/internal/utils"
+	"fmt"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -28,6 +32,30 @@ func NewApplication() *Application {
 	// Create project state and refresh to detect CMakeLists.txt
 	projectState := state.NewProjectState()
 	projectState.ForceRefresh() // This populates HasCMakeLists
+
+	// Capture Visual Studio environment on Windows (enables cmake invocation)
+	vcVarsAllPath, vsErr := utils.FindVCVarsAll()
+	var capturedVSEnv []string
+	debugLog, _ := os.Create(`C:\Users\jreng\cake-debug.txt`)
+	if vsErr == nil {
+		var captureErr error
+		capturedVSEnv, captureErr = utils.CaptureVSEnv(vcVarsAllPath)
+		if captureErr != nil {
+			fmt.Fprintf(debugLog, "CaptureVSEnv failed: %v\n", captureErr)
+		} else {
+			fmt.Fprintf(debugLog, "CaptureVSEnv captured %d env vars\n", len(capturedVSEnv))
+			fmt.Fprintf(debugLog, "vcVarsAllPath: %s\n", vcVarsAllPath)
+			for _, e := range capturedVSEnv {
+				if strings.HasPrefix(strings.ToUpper(e), "PATH=") {
+					fmt.Fprintf(debugLog, "PATH: %s\n", e[:200])
+					break
+				}
+			}
+		}
+	} else {
+		fmt.Fprintf(debugLog, "FindVCVarsAll failed: %v\n", vsErr)
+	}
+	debugLog.Close()
 
 	// Check if current directory is a valid CMake project
 	isValidProject := projectState.HasCMakeLists
@@ -67,5 +95,6 @@ func NewApplication() *Application {
 		outputBuffer:    ui.GetBuffer(),
 		footerHint:      footerHint,
 		quitConfirmTime: time.Now(),
+		vsEnv:           capturedVSEnv,
 	}
 }
