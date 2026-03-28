@@ -151,6 +151,62 @@
 
 ---
 
+## Sprint 2: MSVC Environment Detection + Console Output Streaming
+
+**Date:** 2026-03-28
+
+### Agents Participated
+- **COUNSELOR** — Diagnosed root cause (no cmake on PATH in MSYS2), planned MSVC detection and console streaming fixes
+- **Pathfinder** — Explored cake/TIT codebases, verified vswhere paths, checked VS installation structure
+- **Librarian** — Researched vswhere.exe usage, vcvarsall.bat env capture patterns in Go
+- **Engineer** — Implemented MSVC detection, console streaming rewrite, dead code cleanup
+- **Auditor** — Validated all changes (2 passes: MSVC detection + console streaming)
+
+### Files Modified (15 total)
+- `internal/utils/msvc.go:1-112` — New: vswhere detection, vcvarsall env capture, cmake path resolution (windows build tag)
+- `internal/utils/msvc_stub.go:1-20` — New: non-windows stubs for cross-compilation
+- `internal/utils/stream.go:1-106` — Rewrite: byte-by-byte pipe reading, \r progress handling, WaitGroup drain
+- `internal/utils/exec.go` — Deleted: unused stub
+- `internal/utils/generator.go` — Deleted: dead code, wrong path scheme
+- `internal/utils/platform.go` — Deleted: dead code, unused by app
+- `internal/ui/buffer.go:70-92` — Added ReplaceLast() for progress line updates
+- `internal/app/constants.go:1-8` — New: CacheRefreshInterval constant
+- `internal/app/app.go:64,1108-1116` — Added vsEnv field, outputCallbacks() helper, use CacheRefreshInterval
+- `internal/app/init.go:36-39` — VS env capture at startup
+- `internal/ops/setup.go:17` — Dual callback signature, cmake path resolution from vsEnv
+- `internal/ops/build.go:16` — Dual callback signature, cmake path resolution from vsEnv
+- `internal/app/op_generate.go:27-41` — Uses outputCallbacks(), passes vsEnv
+- `internal/app/op_build.go:21-35` — Uses outputCallbacks(), passes vsEnv
+- `internal/app/op_regenerate.go:30-44` — Uses outputCallbacks(), passes vsEnv
+- `internal/app/op_clean.go:21` — Uses outputCallbacks() (append only)
+- `internal/app/op_clean_all.go:25` — Uses outputCallbacks() (append only)
+- `internal/app/op_open.go:20,52` — Uses outputCallbacks() (append only)
+- `internal/state/project.go:130-150` — VS detection via vswhere, version-aware (only installed versions)
+
+### Alignment Check
+- [x] LIFESTAR principles followed
+- [x] NAMING-CONVENTION.md adhered (versionToGenerator, appendCallback, replaceCallback, isProgressLine)
+- [x] ARCHITECTURAL-MANIFESTO.md principles applied (SSOT: outputCallbacks helper, Lean: streamPipe extracted, Explicit: clear callback signatures)
+- [ ] No early returns — Go exempt per ARCHITECT decision (Go idiom accepted)
+
+### Problems Solved
+- cake could not invoke cmake on Windows/MSYS2 (cmake not on PATH)
+- VS generator detection was version-blind (added both VS2022+VS2026 regardless of what's installed)
+- VS install path uses version number ("18") not marketing year ("2026") — fixed detection
+- Go's exec.Command escapes quotes with backslashes, cmd.exe doesn't understand — fixed with SysProcAttr.CmdLine
+- Go's exec.LookPath resolves executable against process PATH, not cmd.Env — fixed with FindExecutableInEnv
+- Console output race condition: pipes not drained before cmd.Wait() — fixed with WaitGroup
+- No \r progress line handling — added byte-by-byte reading matching TIT pattern
+
+### Technical Debt / Follow-up
+- CaptureVSEnv error silently discarded in init.go — acceptable for startup (no UI available yet) but could log to file
+- Debug file C:\Users\jreng\cake-debug.txt may still exist on disk — delete manually
+- Ninja generator on Windows also needs vcvarsall env (for cl.exe) — currently works because vsEnv is passed to all cmake calls regardless of generator
+
+**Status:** APPROVED - VS 2026 detected, cmake generates successfully from cake
+
+---
+
 <!-- Actual sprint entries go here, written by PRIMARY agents -->
 
 ---
