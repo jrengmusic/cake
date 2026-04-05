@@ -9,10 +9,14 @@ case "$HOOK_TARGET" in
       --entitlements ./entitlements.plist \
       --sign "Developer ID Application: Bayu Ardianto (9BDSN9TDX3)" \
       "$HOOK_PATH"
+    codesign --verify --verbose "$HOOK_PATH"
 
     echo "Notarizing $HOOK_PATH..."
-    xcrun notarytool submit "$HOOK_PATH" \
+    ZIP=$(mktemp /tmp/cake-notarize-XXXXXX.zip)
+    ditto -c -k --keepParent "$HOOK_PATH" "$ZIP"
+    xcrun notarytool submit "$ZIP" \
       --keychain-profile notary \
       --wait
+    rm "$ZIP"
     ;;
 esac
