@@ -17,7 +17,7 @@ type MenuRow struct {
 
 // GenerateMenuRows returns exactly 8 rows (used by app.go)
 // All rows always visible - unavailable options are dimmed and not selectable
-func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool, canClean bool, hasBuild bool, hasBuildsToClean bool) []MenuRow {
+func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool, canClean bool, hasBuild bool, hasBuildsToClean bool, isIDEGenerator bool) []MenuRow {
 	regenerateLabel := "Generate"
 	if hasBuild {
 		regenerateLabel = "Regenerate"
@@ -57,12 +57,12 @@ func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool
 			Shortcut:      "o",
 			ShortcutLabel: "o",
 			Emoji:         "📂",
-			Label:         "Open IDE",
+			Label:         openIdeLabel(isIDEGenerator),
 			Value:         "",
 			Visible:       true,
 			IsAction:      true,
-			IsSelectable:  canOpenIDE, // Not selectable when unavailable
-			Hint:          "Launch IDE for this project",
+			IsSelectable:  canOpenIDE,
+			Hint:          openIdeHint(isIDEGenerator),
 		},
 		{
 			ID:            "separator",
@@ -125,4 +125,18 @@ func GenerateMenuRows(projectLabel string, configuration string, canOpenIDE bool
 			Hint:          "Remove entire Builds/ directory (all projects)",
 		},
 	}
+}
+
+func openIdeLabel(isIDEGenerator bool) string {
+	if isIDEGenerator {
+		return "Open IDE"
+	}
+	return "Open Editor"
+}
+
+func openIdeHint(isIDEGenerator bool) string {
+	if isIDEGenerator {
+		return "Open project in IDE"
+	}
+	return "Open build directory in editor"
 }

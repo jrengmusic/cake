@@ -1,6 +1,9 @@
 package app
 
-import "github.com/jrengmusic/cake/internal/ui"
+import (
+	"github.com/jrengmusic/cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/utils"
+)
 
 // GenerateMenu returns exactly 8 rows using UI package
 func (a *Application) GenerateMenu() []ui.MenuRow {
@@ -9,6 +12,7 @@ func (a *Application) GenerateMenu() []ui.MenuRow {
 	canClean := buildInfo.Exists
 	hasBuild := buildInfo.Exists
 	hasBuildsToClean := a.projectState.HasBuildsToClean()
+	isIDEGenerator := utils.IsGeneratorIDE(a.projectState.SelectedProject)
 
 	return ui.GenerateMenuRows(
 		a.projectState.GetProjectLabel(),
@@ -17,5 +21,6 @@ func (a *Application) GenerateMenu() []ui.MenuRow {
 		canClean,
 		hasBuild,
 		hasBuildsToClean,
+		isIDEGenerator,
 	)
 }

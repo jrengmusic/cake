@@ -203,21 +203,9 @@ func (ps *ProjectState) CanBuild() bool {
 	return buildInfo.Exists && buildInfo.IsConfigured
 }
 
-// CanOpenIDE returns true if the selected project is an IDE project
+// CanOpenIDE returns true if any project is available (IDE or editor)
 func (ps *ProjectState) CanOpenIDE() bool {
-	for _, gen := range ps.AvailableProjects {
-		if gen.Name == ps.SelectedProject && gen.IsIDE {
-			return true
-		}
-	}
-	return false
-}
-
-// CanOpenEditor returns true if we can open editor (CLI build exists)
-func (ps *ProjectState) CanOpenEditor() bool {
-	buildInfo := ps.GetSelectedBuildInfo()
-	// Can open editor if build exists (even if not configured)
-	return buildInfo.Exists
+	return len(ps.AvailableProjects) > 0
 }
 
 // HasBuildsToClean returns true if Builds/ directory exists and has content

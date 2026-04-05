@@ -1,4 +1,4 @@
-# cake Specification v0.0.1
+# cake Specification v0.0.2
 
 ## Overview
 
@@ -19,8 +19,8 @@
 
 ## Core Principles
 
-1. **Preference-Style Interface**: Single-page menu with toggleable values (like TIT), no nested submenus
-2. **Dynamic Visibility**: Menu items appear/disappear based on build state and generator capabilities
+1. **Preference-Style Interface**: Single-page menu with toggleable values, no nested submenus
+2. **Conditional Selectability**: Menu items are always visible but become unselectable (grayed out) when unavailable based on build state and generator capabilities
 3. **System Tool Detection**: Available generators determined by installed tools, not disk scanning
 4. **65/35 Split Layout**: Menu on left half, ASCII banner on right half, both centered
 5. **Build Path Convention**: Strict `Builds/<Generator>/` structure (all generators multi-config)
@@ -45,15 +45,17 @@ All Generators (multi-config, build contains all configurations):
 Path: Builds/<Generator>/
 ```
 
-### Menu Item Visibility Rules
+### Menu Item Selectability Rules
 ```
-Generator: ALWAYS visible
-Generate/Regenerate: visible if CMakeLists.txt exists
-Open IDE: visible if IDE generator AND build exists
-Open Editor: visible if CLI generator AND build exists
-Configuration: ALWAYS visible
-Build: visible if build exists AND configured
-Clean: visible if build exists
+All rows are always visible. Unavailable rows are shown dimmed and are not navigable.
+
+Project: ALWAYS selectable
+Generate/Regenerate: ALWAYS selectable (requires CMakeLists.txt to execute)
+Open IDE/Editor: selectable if any generator is selected AND build exists
+Configuration: ALWAYS selectable
+Build: selectable if build exists AND configured
+Clean: selectable if build exists for selected project
+Clean All: selectable if any build directory exists
 ```
 
 ## Feature Specifications
@@ -73,21 +75,21 @@ Clean: visible if build exists
 Project directory:
 /Users/username/myproject
 
-⚙️  Generator              Xcode           
+⚙️  Project                Xcode           
 🚀  Generate                               
-📂  Open IDE                               
+📂  Open IDE / Open Editor  (label is dynamic, depends on generator)    
 ────────────────────────────────────────
 🏗️  Configuration          Debug           
 🔨  Build                                  
 🧹  Clean                                  
-   Clean All                              
+💥  Clean All                              
 
 ↑↓ navigate │ Enter select │ Ctrl+C quit │ / preferences
 ```
 
 **User Input:**
-- ↑/k: Move selection up (skip separators)
-- ↓/j: Move selection down (skip separators)
+- ↑/k: Move selection up (skip unselectable rows)
+- ↓/j: Move selection down (skip unselectable rows)
 - Enter/Space: Toggle value or execute action
 - /: Open preferences screen
 - Ctrl+C: Quit (confirm if pressed twice)
@@ -106,8 +108,8 @@ Project directory:
 
 ##### Edge Case 2: Empty Builds Directory
 **Scenario:** No builds exist yet
-**Expected Behavior:** Show only Generator selection and Generate action
-**Menu State:** Build, Clean, Open IDE/Editor hidden
+**Expected Behavior:** Show only Project selection and Generate action as selectable
+**Menu State:** Build, Clean, Open IDE/Editor shown but unselectable (dimmed)
 
 ##### Edge Case 3: Navigation at Boundaries
 **Scenario:** User presses up at first item or down at last
@@ -116,9 +118,9 @@ Project directory:
 ### Feature: Generator Selection
 
 #### User Flow (Happy Path)
-1. User selects Generator row
+1. User selects Project row
 2. User presses Enter or Space
-3. System cycles to next available generator
+3. System cycles to next available CMake generator
 4. Display updates immediately with new generator name
 
 **Available Generators Detection:**
@@ -136,7 +138,7 @@ Xcode → Ninja → Xcode (loop)
 | Error Condition | User Sees | System Action |
 |-----------------|-----------|---------------|
 | No generators available | "No CMake generators found" | Disable generate action |
-| Only one generator | Generator name (no cycling) | Enter does nothing |
+| Only one generator | Generator name shown (no cycling) | Enter does nothing |
 
 ### Feature: Configuration Toggle
 
@@ -246,9 +248,16 @@ rm -rf Builds/<Generator>
 
 ### Feature: Open IDE/Editor
 
+This is a single menu row that launches an external tool. The row label and behavior depend on the selected generator:
+
+- **IDE generators (Xcode, Visual Studio):** Row shows "Open IDE". Launches the IDE project file.
+- **CLI generators (Ninja):** Row shows "Open Editor". Opens nvim in the build directory.
+
+The `o` shortcut works for both. The row is selectable when any generator is selected and a build exists.
+
 #### IDE Flow (Xcode, Visual Studio)
-1. User selects "Open IDE" row (only for IDE generators)
-2. User presses Enter
+1. User selects "Open IDE" row
+2. User presses Enter or `o`
 3. System launches IDE with project file
 4. cake continues running, shows status
 
@@ -263,15 +272,14 @@ start Builds/VS2026/*.sln
 ```
 
 #### Editor Flow (Ninja)
-1. User selects "Open Editor" row (only for CLI generators)
-2. User presses Enter
-3. System launches Neovim in build directory
-4. cake waits for editor to close
-5. Returns to menu with "Editor closed" message
+1. User selects "Open Editor" row
+2. User presses Enter or `o`
+3. System opens nvim in the build directory
+4. cake continues running, shows status
 
-**Neovim Command:**
+**Ninja Command:**
 ```bash
-nvim Builds/<Generator>/
+nvim Builds/Ninja/
 ```
 
 ### Feature: Preferences Screen
@@ -301,9 +309,10 @@ nvim Builds/<Generator>/
 - When ON: Project state refreshes at interval
 - When OFF: No automatic scanning
 
-##### Update Interval Cycle
-- Values: 5 min → 10 min → 15 min → 30 min → 5 min
-- Only visible when Auto-update is ON
+##### Update Interval Adjustment
+- +/= decreases by 1 min; -/_ increases by 1 min; Shift+= increases by 10 min; Shift+- decreases by 10 min
+- Range: 1 min to 60 min
+- Only selectable when Auto-update is ON
 
 ##### Theme Cycle
 - Values: gfx → spring → summer → autumn → winter → gfx
@@ -337,15 +346,15 @@ nvim Builds/<Generator>/
 
 #### File Format
 ```toml
-[preferences]
-auto_scan_enabled = true
-auto_scan_interval = 10
+[auto_scan]
+enabled = true
+interval_minutes = 10
 
 [appearance]
 theme = "gfx"
 
-[project]
-last_generator = "Xcode"
+[build]
+last_project = "Xcode"
 last_configuration = "Debug"
 ```
 
@@ -378,8 +387,15 @@ last_configuration = "Debug"
 | ↓/j | Navigate down | Menu/Preferences |
 | Enter | Execute/Toggle | All menus |
 | Space | Execute/Toggle | All menus |
+| g | Generate/Regenerate | Menu |
+| b | Build | Menu |
+| o | Open IDE / Open Editor | Menu |
 | c | Clean | Menu |
 | x | Clean All | Menu |
+| +/= | Increase interval by 1 min | Preferences (interval row) |
+| -/_ | Decrease interval by 1 min | Preferences (interval row) |
+| Shift+= | Increase interval by 10 min | Preferences (interval row) |
+| Shift+- | Decrease interval by 10 min | Preferences (interval row) |
 | / | Toggle preferences | Menu ↔ Preferences |
 | Esc | Exit/Cancel | Console → Menu, Prefs → Menu |
 | Ctrl+C | Quit (2x to confirm) | All modes |
@@ -435,7 +451,6 @@ last_configuration = "Debug"
 | Build | Compilation fails | "Build failed: [error summary]" | Show full output, ESC to return |
 | Clean | Permission denied | "Clean failed: [OS error]" | Return to menu |
 | Open IDE | Project not found | "Failed to open IDE: project file not found" | Return to menu |
-| Open Editor | Neovim not found | "Failed to open editor: nvim not found" | Return to menu |
 
 ## Success Criteria
 
@@ -445,8 +460,7 @@ A user can:
 - [x] Generate/regenerate CMake builds with one keypress
 - [x] Build projects with real-time output streaming
 - [x] Clean builds completely with confirmation
-- [x] Open IDE projects (Xcode/VS) directly from menu
-- [x] Open editor in build directory for CLI generators
+- [x] Open IDE projects (Xcode/VS) or editor (Ninja) directly from menu
 - [x] Access preferences via `/` key
 - [x] Enable/disable auto-scanning
 - [x] Change themes instantly
@@ -456,7 +470,7 @@ A user can:
 The system:
 - [x] Detects available generators based on installed tools
 - [x] Maintains correct build path structure (Builds/<Generator>/<Config?>)
-- [x] Shows/hides menu items based on build state
+- [x] Dims/enables menu items based on build state (selectability model)
 - [x] Persists configuration to ~/.config/cake/config.toml
 - [x] Auto-scans at configured intervals when enabled
 - [x] Handles CMake operations asynchronously with live output
@@ -469,7 +483,7 @@ The system:
 
 ### Required Patterns
 - ✅ Single-page preference menu (no submenus/navigation)
-- ✅ Dynamic visibility based on state
+- ✅ Conditional selectability based on state (all rows always visible)
 - ✅ System tool detection (not disk scanning for generators)
 - ✅ Strict build path convention (Builds/<Generator>/<Config?>)
 - ✅ Real-time output streaming for operations

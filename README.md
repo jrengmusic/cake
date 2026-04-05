@@ -64,7 +64,7 @@ Or download a pre-built binary from [GitHub Releases](https://github.com/jrengmu
 
 **Build fast:** Press `b`, watch compiler output stream live.
 
-**Open IDE:** Press `o`, Xcode or Visual Studio launches instantly.
+**Open IDE / Editor:** Press `o`. Xcode or Visual Studio launches for IDE generators. For Ninja, opens nvim in the build directory.
 
 **Clean slate:** Press `c` to clean current project, `x` to nuke everything. Start fresh.
 
@@ -79,7 +79,7 @@ Or download a pre-built binary from [GitHub Releases](https://github.com/jrengmu
 | `b` | Build |
 | `c` | Clean |
 | `x` | Clean All |
-| `o` | Open IDE |
+| `o` | Open IDE / Editor |
 | `Esc` | Back/Cancel |
 | `Ctrl+C` | Exit (press twice) |
 | `/` | Preferences |

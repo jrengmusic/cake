@@ -110,7 +110,7 @@ func TestGenerateMenuRows_AlwaysReturns8Rows(t *testing.T) {
 		{false, true, false, true},
 	}
 	for _, c := range combos {
-		rows := GenerateMenuRows("Xcode", "Debug", c.canOpenIDE, c.canClean, c.hasBuild, c.hasBuildsToClean)
+		rows := GenerateMenuRows("Xcode", "Debug", c.canOpenIDE, c.canClean, c.hasBuild, c.hasBuildsToClean, false)
 		if len(rows) != 8 {
 			t.Errorf("expected 8 rows, got %d (combo %+v)", len(rows), c)
 		}
@@ -118,7 +118,7 @@ func TestGenerateMenuRows_AlwaysReturns8Rows(t *testing.T) {
 }
 
 func TestGenerateMenuRows_AllVisible(t *testing.T) {
-	rows := GenerateMenuRows("Ninja", "Release", true, true, true, true)
+	rows := GenerateMenuRows("Ninja", "Release", true, true, true, true, false)
 	for _, row := range rows {
 		if !row.Visible {
 			t.Errorf("row %q should be Visible", row.ID)
@@ -127,7 +127,7 @@ func TestGenerateMenuRows_AllVisible(t *testing.T) {
 }
 
 func TestGenerateMenuRows_SeparatorNotSelectable(t *testing.T) {
-	rows := GenerateMenuRows("Xcode", "Debug", true, true, true, true)
+	rows := GenerateMenuRows("Xcode", "Debug", true, true, true, true, false)
 	sep := rows[3]
 	if sep.ID != "separator" {
 		t.Fatalf("row[3] expected separator, got %q", sep.ID)
@@ -154,7 +154,7 @@ func TestGenerateMenuRows_SelectabilityByFlags(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rows := GenerateMenuRows("Xcode", "Debug", tt.canOpenIDE, tt.canClean, false, tt.hasBuildsToClean)
+			rows := GenerateMenuRows("Xcode", "Debug", tt.canOpenIDE, tt.canClean, false, tt.hasBuildsToClean, false)
 
 			if rows[2].IsSelectable != tt.wantOpenIDESelectable {
 				t.Errorf("openIde IsSelectable: got %v want %v", rows[2].IsSelectable, tt.wantOpenIDESelectable)
@@ -170,12 +170,12 @@ func TestGenerateMenuRows_SelectabilityByFlags(t *testing.T) {
 }
 
 func TestGenerateMenuRows_RegenerateLabelByHasBuild(t *testing.T) {
-	rowsNoBuild := GenerateMenuRows("Xcode", "Debug", false, false, false, false)
+	rowsNoBuild := GenerateMenuRows("Xcode", "Debug", false, false, false, false, false)
 	if rowsNoBuild[1].Label != "Generate" {
 		t.Errorf("hasBuild=false: expected Label 'Generate', got %q", rowsNoBuild[1].Label)
 	}
 
-	rowsHasBuild := GenerateMenuRows("Xcode", "Debug", false, false, true, false)
+	rowsHasBuild := GenerateMenuRows("Xcode", "Debug", false, false, true, false, false)
 	if rowsHasBuild[1].Label != "Regenerate" {
 		t.Errorf("hasBuild=true: expected Label 'Regenerate', got %q", rowsHasBuild[1].Label)
 	}
@@ -183,7 +183,7 @@ func TestGenerateMenuRows_RegenerateLabelByHasBuild(t *testing.T) {
 
 func TestGenerateMenuRows_RowIDs(t *testing.T) {
 	expectedIDs := []string{"project", "regenerate", "openIde", "separator", "configuration", "build", "clean", "cleanAll"}
-	rows := GenerateMenuRows("Xcode", "Debug", true, true, true, true)
+	rows := GenerateMenuRows("Xcode", "Debug", true, true, true, true, false)
 
 	for i, id := range expectedIDs {
 		if rows[i].ID != id {
@@ -194,7 +194,7 @@ func TestGenerateMenuRows_RowIDs(t *testing.T) {
 
 func TestGenerateMenuRows_FixedSelectableRows(t *testing.T) {
 	// project, regenerate, configuration, build are always selectable
-	rows := GenerateMenuRows("Xcode", "Debug", false, false, false, false)
+	rows := GenerateMenuRows("Xcode", "Debug", false, false, false, false, false)
 
 	alwaysSelectable := map[int]string{0: "project", 1: "regenerate", 4: "configuration", 5: "build"}
 	for idx, id := range alwaysSelectable {

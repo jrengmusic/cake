@@ -1,9 +1,10 @@
 package app
 
 import (
-	"github.com/jrengmusic/cake/internal/ui"
 	"fmt"
 
+	"github.com/jrengmusic/cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -227,7 +228,11 @@ func (a *Application) executeRowAction(rowID string) (bool, tea.Cmd) {
 		a.showCleanAllConfirmDialog()
 		return true, nil
 	case "openIde":
-		_, cmd := a.startOpenIDEOperation()
+		if utils.IsGeneratorIDE(a.projectState.SelectedProject) {
+			_, cmd := a.startOpenIDEOperation()
+			return true, cmd
+		}
+		_, cmd := a.startOpenEditorOperation()
 		return true, cmd
 	case "configuration":
 		a.projectState.CycleConfiguration()

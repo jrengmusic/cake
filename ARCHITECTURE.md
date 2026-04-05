@@ -236,8 +236,7 @@ ps.Configuration string                  // "Debug" or "Release" (accessed direc
 // Predicates
 ps.CanGenerate() bool   // SelectedProject != "" && HasCMakeLists
 ps.CanBuild() bool      // build dir exists and IsConfigured
-ps.CanOpenIDE() bool    // SelectedProject is an IDE generator
-ps.CanOpenEditor() bool // build dir exists
+ps.CanOpenIDE() bool    // len(AvailableProjects) > 0 (any generator selected)
 ps.HasBuildsToClean() bool // Builds/ directory is non-empty
 
 // Direct field reads (within app package)
@@ -548,6 +547,8 @@ func (a *Application) GetFooterContent() string {
 // Always returns exactly 8 rows
 // Fixed order: Project, Regenerate, OpenIDE, Separator, Configuration, Build, Clean, CleanAll
 // Unavailable items: Visible=true, IsSelectable=false (dimmed, not navigable)
+// openIde row label is dynamic: "Open IDE" for IDE generators (Xcode, VS), "Open Editor" for CLI generators (Ninja)
+// Label determined by isIDEGenerator flag derived from the selected project at call time
 func GenerateMenuRows(projectLabel, configuration string, canOpenIDE, canClean, hasBuild, hasBuildsToClean bool) []MenuRow
 
 // Navigation skips non-selectable rows

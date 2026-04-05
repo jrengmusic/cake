@@ -1,9 +1,7 @@
-First public release.
+## What's New in v0.0.2
 
-## What is CAKE?
-
-CMake project manager TUI. One keypress to generate, build, clean, or open IDE.
-Menu shows only actions that will succeed based on actual build state.
+- Open Editor: press `o` with Ninja selected to open nvim in build directory
+- Menu label changes dynamically: "Open IDE" for Xcode/VS, "Open Editor" for Ninja
 
 ## Platforms
 
@@ -24,11 +22,6 @@ Download binary from this release, or:
 go install github.com/jrengmusic/cake/cmd/cake@latest
 ```
 
-## Requirements
-
-- CMake in PATH
-- Terminal 70x24 minimum
-
 ## Keyboard
 
 | Key | Action |
@@ -37,5 +30,5 @@ go install github.com/jrengmusic/cake/cmd/cake@latest
 | b | Build |
 | c | Clean |
 | x | Clean All |
-| o | Open IDE |
+| o | Open IDE / Editor |
 | / | Preferences |

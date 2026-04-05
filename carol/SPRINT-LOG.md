@@ -39,7 +39,7 @@
 - Latest sprint at top, keep last 5 entries
 
 **NAMING RULE (CODE VOCABULARY)**
-- All identifiers must obey project-specific naming conventions (see NAMING-CONVENTION.md)
+- All identifiers must obey project-specific naming conventions (see carol/NAMES.md)
 - Variable names: semantic + precise (not `temp`, `data`, `x`)
 - Function names: verb-noun pattern (initRepository, detectCanonBranch)
 - Struct fields: domain-specific terminology (not generic `value`, `item`, `entry`)
@@ -110,6 +110,100 @@
 <!-- Keep last 5 sprints, rotate older to git history -->
 
 ## SPRINT HISTORY
+
+## Sprint 5: Open Editor for Ninja + Release Polish
+
+**Date:** 2026-04-05
+
+### Agents Participated
+- **COUNSELOR** — Plan, coordination, goreleaser fix
+- **Pathfinder** — Code discovery for nvim wiring (state, ops, menu, actions)
+- **Engineer** — Implemented Open IDE/Editor dispatch, doc updates (SPEC, ARCHITECTURE, README)
+- **Machinist** — Clean sweep of audit findings (Sprint 4 carryover)
+
+### Files Modified (10 total)
+- `internal/state/project.go` — `CanOpenIDE()` simplified to `len(ps.AvailableProjects) > 0`; `CanOpenEditor()` deleted (dead code)
+- `internal/ui/menu.go` — `GenerateMenuRows` adds `isIDEGenerator bool` param; `openIde` row label/hint dynamic via `openIdeLabel()`/`openIdeHint()` helpers
+- `internal/app/menu.go` — Passes `utils.IsGeneratorIDE()` to `GenerateMenuRows`
+- `internal/app/app_actions.go` — `"openIde"` case dispatches to `startOpenIDEOperation()` or `startOpenEditorOperation()` based on generator type
+- `internal/ui/ui_test.go` — Updated `GenerateMenuRows` call sites with new `isIDEGenerator` param
+- `SPEC.md` — Open IDE/Editor feature documented (dynamic label, both IDE and CLI generators), selectability rules updated, corrected to match codebase
+- `ARCHITECTURE.md` — `CanOpenIDE()` contract updated, Pattern 4 annotated with dynamic label behavior
+- `README.md` — `o` shortcut updated to "Open IDE / Editor", workflow section updated
+- `.goreleaser.yaml` — `format: binary` (deprecated) to `formats: [binary]`
+- `release.sh` — `gh release delete --cleanup-tag` replaces manual tag deletion
+
+### Alignment Check
+- [x] BLESSED principles followed
+- [x] carol/NAMES.md adhered
+- [x] carol/MANIFESTO.md principles applied
+- [x] No new dead code (CanOpenEditor removed, startOpenEditorOperation now wired)
+
+### Problems Solved
+- Ninja generator had no "open" action — now opens nvim via same `openIde` row with dynamic label
+- goreleaser `archives.format` deprecation warning — migrated to `formats` (plural, list)
+- Release re-run left orphan GitHub releases — `gh release delete --cleanup-tag` cleans up both release and tag
+
+### Technical Debt / Follow-up
+- None
+
+**Status:** Complete, ready for v0.0.2 release
+
+---
+
+## Sprint 4: v0.0.1 Release and Documentation Audit
+
+**Date:** 2026-04-05
+
+### Agents Participated
+- **COUNSELOR** — Release infrastructure planning, goreleaser debugging, doc audit coordination
+- **Pathfinder** — Git remotes, doc inventory, release infrastructure discovery
+- **Researcher** — goreleaser OSS capabilities (signing hooks, cross-compilation, token auth)
+- **Librarian** — goreleaser OSS vs PRO features, gh CLI token bridging
+- **Engineer** (x5) — README, SPEC, ARCHITECTURE, SPRINT-LOG updates, post-build script, token file setup
+- **Auditor** (x3) — Release readiness, test suite verification, comprehensive docs audit
+- **Machinist** — Clean sweep of all audit findings across SPEC, ARCHITECTURE, SPRINT-LOG
+
+### Files Modified (12 total)
+- `.goreleaser.yaml` — goreleaser v2 config with post-build hook (replaced PRO-only `if` filters and `release_notes` field)
+- `release.sh` — One-command release: commit, tag, push, gh auth token bridge, release notes via CLI flag
+- `scripts/post-build.sh` — macOS sign+notarize wrapper (concurrent-safe with mktemp -d)
+- `RELEASE_NOTES.md` — GitHub release description for v0.0.1
+- `.gitignore` — Added `/dist/` (goreleaser output)
+- `internal/constants.go` — AppVersion changed from const to var, default "dev", ldflags injectable
+- `build.sh` — Added git describe version detection and ldflags injection
+- `internal/app/messages.go` — Footer hint: added `[x] Clean All`
+- `internal/ui/menu.go` — Clean shortcut `k` to `c`, Clean All `ctrl+k` to `x`
+- `internal/app/app_handlers.go` — menuShortcutMap: `ctrl+k` to `x`/`X`
+- `README.md` — Public release install instructions, shortcuts, removed TIT reference
+- `SPEC.md` — v0.0.2, selectability model, corrected menu labels/shortcuts/interval/config format, removed Open Editor as separate row
+- `ARCHITECTURE.md` — Removed dead CanOpenEditor() from interface contract
+- `carol/SPRINT-LOG.md` — Fixed obsolete doc references (LIFESTAR to BLESSED, NAMING-CONVENTION to NAMES, ARCHITECTURAL-MANIFESTO to MANIFESTO)
+
+### Alignment Check
+- [x] BLESSED principles followed
+- [x] carol/NAMES.md adhered
+- [x] carol/MANIFESTO.md principles applied
+- [x] SSOT: SPEC.md corrected to match codebase (codebase is SSOT)
+- [x] All audit findings resolved (0 deferred)
+
+### Problems Solved
+- goreleaser OSS does not support `if` on build hooks — solved with wrapper script checking $HOOK_TARGET
+- goreleaser OSS does not support `release_notes` YAML field — solved with `--release-notes` CLI flag
+- notarytool requires zip not bare binary — solved with ditto zip, submit, cleanup
+- Concurrent hooks collided on temp file — solved with mktemp -d (unique dir per invocation)
+- dist/ committed by git add -A — solved with .gitignore entry
+- GITHUB_TOKEN missing — solved with gh auth token bridge
+- SPEC.md diverged from implementation (menu labels, shortcuts, visibility model, interval control, config format) — corrected all
+
+### Technical Debt / Follow-up
+- Dead code: CanOpenEditor(), startOpenEditorOperation(), cmdOpenEditor() — will be wired in Sprint 5 (nvim as Ninja IDE)
+- `archives.format: binary` deprecation warning from goreleaser v2 — cosmetic, works fine
+- TIT release RFC written at ~/Documents/Poems/dev/tit/RFC.md — not yet executed
+
+**Status:** v0.0.1 released, signed, notarized, all docs audit-clean
+
+---
 
 ## Sprint 3: Production Refactoring, Test Coverage, and Release Infrastructure
 
@@ -221,9 +315,9 @@
 - `internal/state/project.go:130-150` — VS detection via vswhere, version-aware (only installed versions)
 
 ### Alignment Check
-- [x] LIFESTAR principles followed
-- [x] NAMING-CONVENTION.md adhered (versionToGenerator, appendCallback, replaceCallback, isProgressLine)
-- [x] ARCHITECTURAL-MANIFESTO.md principles applied (SSOT: outputCallbacks helper, Lean: streamPipe extracted, Explicit: clear callback signatures)
+- [x] BLESSED principles followed
+- [x] carol/NAMES.md adhered (versionToGenerator, appendCallback, replaceCallback, isProgressLine)
+- [x] carol/MANIFESTO.md principles applied (SSOT: outputCallbacks helper, Lean: streamPipe extracted, Explicit: clear callback signatures)
 - [ ] No early returns — Go exempt per ARCHITECT decision (Go idiom accepted)
 
 ### Problems Solved
