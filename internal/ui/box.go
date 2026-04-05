@@ -46,11 +46,6 @@ func (sc StyledContent) Render() string {
 	return style.Render(sc.Text)
 }
 
-// Width returns rendered width (accounting for color codes)
-func (sc StyledContent) Width() string {
-	return sc.Render()
-}
-
 // Line represents a single formatted line (left, center, or right aligned)
 type Line struct {
 	Content   StyledContent

@@ -3,15 +3,10 @@ package app
 import (
 	"time"
 
-	"cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/ui"
 )
 
 type TickMsg time.Time
-
-type SetupCompleteMsg struct {
-	Success bool
-	Error   string
-}
 
 type BuildCompleteMsg struct {
 	Success  bool
@@ -69,25 +64,26 @@ const (
 	MessageExitBlocked
 )
 
+var footerMessageText = map[FooterMessageType]string{
+	MessageNone:              "",
+	MessageCtrlCConfirm:      "Press Ctrl+C again to quit (3s timeout)",
+	MessageSetupInProgress:   "Setting up CMake... (ESC to abort)",
+	MessageBuildInProgress:   "Building project... (ESC to abort)",
+	MessageCleanInProgress:   "Cleaning project... (ESC to abort)",
+	MessageOperationComplete: "Operation completed. Press ESC to return.",
+	MessageOperationFailed:   "Operation failed. Press ESC to return.",
+	MessageExitBlocked:       "Operation in progress. Cannot quit.",
+}
+
 func GetFooterMessageText(msgType FooterMessageType) string {
-	messages := map[FooterMessageType]string{
-		MessageNone:              "",
-		MessageCtrlCConfirm:      "Press Ctrl+C again to quit (3s timeout)",
-		MessageSetupInProgress:   "Setting up CMake... (ESC to abort)",
-		MessageBuildInProgress:   "Building project... (ESC to abort)",
-		MessageCleanInProgress:   "Cleaning project... (ESC to abort)",
-		MessageOperationComplete: "Operation completed. Press ESC to return.",
-		MessageOperationFailed:   "Operation failed. Press ESC to return.",
-		MessageExitBlocked:       "Operation in progress. Cannot quit.",
-	}
-	if msg, exists := messages[msgType]; exists {
+	if msg, exists := footerMessageText[msgType]; exists {
 		return msg
 	}
 	return ""
 }
 
 var FooterHints = map[string]string{
-	"menu_navigate":    "[g] Generate [b] Build [c] Clean [/] Config ↑↓ select",
+	"menu_navigate":    "[g] Generate [b] Build [c] Clean [o] Open [/] Config ↑↓ select",
 	"setup_gen_choose": "↑↓ choose project │ Enter select │ ESC back",
 	"ide_choose":       "↑↓ choose IDE project │ Enter select │ ESC back",
 	"editor_choose":    "↑↓ choose build dir │ Enter select │ ESC back",
@@ -96,25 +92,6 @@ var FooterHints = map[string]string{
 	"no_build_dir":     "Build directory not found. Run Setup first.",
 	"operation_wait":   "Operation in progress. Please wait...",
 	"scanning":         "[Scanning...]",
-}
-
-var ErrorMessages = map[string]string{
-	"cmake_not_found":     "CMake not found in PATH",
-	"invalid_project":     "Invalid project: %s",
-	"setup_failed":        "Setup failed: %s",
-	"build_failed":        "Build failed: %s",
-	"clean_failed":        "Clean failed: %s",
-	"invalid_build_dir":   "Build directory does not exist: %s",
-	"project_detect_fail": "Failed to detect project: %s",
-	"cwd_read_failed":     "Failed to get current directory",
-}
-
-var OutputMessages = map[string]string{
-	"detecting_project": "Detecting project...",
-	"scanning_projects": "Scanning available projects...",
-	"setup_starting":    "Configuring CMake...",
-	"build_starting":    "Compiling project...",
-	"clean_starting":    "Removing build artifacts...",
 }
 
 // FooterHintShortcuts defines all mode-specific footer shortcuts (SSOT)

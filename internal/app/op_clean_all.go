@@ -4,27 +4,25 @@ import (
 	"os"
 	"path/filepath"
 
-	"cake/internal/ui"
+	"github.com/jrengmusic/cake/internal"
+	"github.com/jrengmusic/cake/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // startCleanAllOperation begins the clean all operation (removes entire Builds/ directory)
 func (a *Application) startCleanAllOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncState.Start()
-	a.outputBuffer.Clear()
-	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
-	a.footerHint = "Removing all build artifacts..."
+	a.enterConsoleMode("Removing all build artifacts...")
 	return a, tea.Batch(a.cmdCleanAllProject(), a.cmdRefreshConsole())
 }
 
 // cmdCleanAllProject executes the clean all command (removes entire Builds/ directory)
 func (a *Application) cmdCleanAllProject() tea.Cmd {
 	return func() tea.Msg {
+		// replace callback unused: operation does not produce progress lines
 		appendCallback, _ := a.outputCallbacks()
 
-		buildsDir := filepath.Join(a.projectState.WorkingDirectory, "Builds")
+		buildsDir := filepath.Join(a.projectState.WorkingDirectory, internal.BuildsDirName)
 
 		appendCallback("", ui.TypeStdout)
 		appendCallback("Cleaning all projects...", ui.TypeInfo)

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"cake/internal/app"
+	"github.com/jrengmusic/cake/internal/app"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

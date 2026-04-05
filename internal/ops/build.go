@@ -1,8 +1,10 @@
 package ops
 
 import (
-	"cake/internal/ui"
-	"cake/internal/utils"
+	"github.com/jrengmusic/cake/internal"
+	"github.com/jrengmusic/cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/utils"
+	"context"
 	"os/exec"
 	"path/filepath"
 )
@@ -13,31 +15,36 @@ type BuildResult struct {
 	Error    string
 }
 
-func ExecuteBuildProject(generator, config, projectRoot string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) BuildResult {
-	buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(generator))
-
+func buildBuildCommand(ctx context.Context, buildDir, config, projectRoot string, vsEnv []string) *exec.Cmd {
 	args := []string{"--build", buildDir, "--config", config}
+	cmakePath := utils.FindExecutableInEnv("cmake", vsEnv)
+	cmd := exec.CommandContext(ctx, cmakePath, args...)
+	cmd.Dir = projectRoot
+	if len(vsEnv) > 0 {
+		cmd.Env = vsEnv
+	}
+	return cmd
+}
+
+func ExecuteBuildProject(ctx context.Context, generator, config, projectRoot string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) BuildResult {
+	buildDir := filepath.Join(projectRoot, internal.BuildsDirName, utils.GetDirectoryName(generator))
+	cmd := buildBuildCommand(ctx, buildDir, config, projectRoot, vsEnv)
 
 	appendCallback("Building: "+buildDir, ui.TypeInfo)
 	appendCallback("Project: "+generator, ui.TypeInfo)
 	appendCallback("Configuration: "+config, ui.TypeInfo)
 	appendCallback("", ui.TypeStdout)
 
-	cmakePath := utils.FindExecutableInEnv("cmake", vsEnv)
-	cmd := exec.Command(cmakePath, args...)
-	cmd.Dir = projectRoot
-	if len(vsEnv) > 0 {
-		cmd.Env = vsEnv
-	}
-
-	// Stream stdout/stderr using helper
 	if err := utils.StreamCommand(cmd, appendCallback, replaceCallback); err != nil {
 		appendCallback("ERROR: "+err.Error(), ui.TypeStderr)
 		return BuildResult{Success: false, Error: err.Error()}
 	}
 
-	// Wait for command to complete
 	err := cmd.Wait()
+
+	if ctx.Err() == context.Canceled {
+		return BuildResult{Success: false, Error: "aborted"}
+	}
 
 	if err != nil {
 		appendCallback("", ui.TypeStdout)

@@ -15,7 +15,7 @@ const (
 	TypeStatus  OutputLineType = "status"  // Success/status messages
 	TypeWarning OutputLineType = "warning" // Warning messages
 	TypeDebug   OutputLineType = "debug"   // Debug/info messages
-	TypeInfo    OutputLineType = "info"    // TIT-generated info
+	TypeInfo    OutputLineType = "info"    // Informational messages
 )
 
 // OutputLine represents a single line in the output buffer
@@ -125,6 +125,17 @@ func (b *OutputBuffer) GetAllLines() []OutputLine {
 	result := make([]OutputLine, len(b.lines))
 	copy(result, b.lines)
 	return result
+}
+
+// GetSnapshot returns a copy of all lines and the total count under a single lock.
+// Use this when both count and lines are needed atomically.
+func (b *OutputBuffer) GetSnapshot() ([]OutputLine, int) {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+
+	result := make([]OutputLine, len(b.lines))
+	copy(result, b.lines)
+	return result, len(result)
 }
 
 // GetLineCount returns the total number of lines in the buffer

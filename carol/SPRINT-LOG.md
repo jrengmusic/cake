@@ -1,14 +1,14 @@
 # SPRINT-LOG.md
 
 **Project:** cake  
-**Repository:** /c/Users/jreng/Documents/Poems/dev/cake  
+**Repository:** github.com/jrengmusic/cake  
 **Started:** 2026-03-28
 
 **Purpose:** Long-term context memory across sessions. Tracks completed work, technical debt, and unresolved issues. Written by PRIMARY agents only when ARCHITECT explicitly requests.
 
 ---
 
-## 📖 Notation Reference
+## Notation Reference
 
 **[N]** = Sprint Number (e.g., `1`, `2`, `3`...)
 
@@ -16,7 +16,7 @@
 
 ---
 
-## ⚠️ CRITICAL RULES
+## CRITICAL RULES
 
 **AGENTS BUILD CODE FOR ARCHITECT TO TEST**
 - Agents build/modify code ONLY when ARCHITECT explicitly requests
@@ -28,8 +28,8 @@
 - Agent runs git ONLY when user explicitly requests
 - Never autonomous git operations
 - **When committing:** Always stage ALL changes with `git add -A` before commit
-  - ❌ DON'T selectively stage files (agents forget/miss files)
-  - ✅ DO `git add -A` to capture every modified file
+  - Don't selectively stage files (agents forget/miss files)
+  - Do `git add -A` to capture every modified file
 
 **SPRINT-LOG WRITTEN BY PRIMARY AGENTS ONLY**
 - **COUNSELOR** or **SURGEON** write to SPRINT-LOG
@@ -46,24 +46,24 @@
 - Type names: PascalCase, clear intent (CanonBranchConfig, not BranchData)
 
 **BEFORE CODING: ALWAYS SEARCH EXISTING PATTERNS**
-- ❌ NEVER invent new states, enums, or utility functions without checking if they exist
-- ✅ Always grep/search the codebase first for existing patterns
-- ✅ Check types, constants, and error handling patterns before creating new ones
+- NEVER invent new states, enums, or utility functions without checking if they exist
+- Always grep/search the codebase first for existing patterns
+- Check types, constants, and error handling patterns before creating new ones
 - **Methodology:** Read → Understand → Find SSOT → Use existing pattern
 
 **TRUST THE LIBRARY, DON'T REINVENT**
-- ❌ NEVER create custom helpers for things the library/framework already does
-- ✅ Trust the library/framework - it's battle-tested
+- NEVER create custom helpers for things the library/framework already does
+- Trust the library/framework - it's battle-tested
 
 **FAIL-FAST RULE (CRITICAL)**
-- ❌ NEVER silently ignore errors (no error suppression)
-- ❌ NEVER use fallback values that mask failures
-- ❌ NEVER return empty strings/zero values when operations fail
-- ❌ NEVER use early returns
-- ✅ ALWAYS check error returns explicitly
-- ✅ ALWAYS return errors to caller or log + fail fast
+- NEVER silently ignore errors (no error suppression)
+- NEVER use fallback values that mask failures
+- NEVER return empty strings/zero values when operations fail
+- NEVER use early returns
+- ALWAYS check error returns explicitly
+- ALWAYS return errors to caller or log + fail fast
 
-**⚠️ NEVER REMOVE THESE RULES**
+**NEVER REMOVE THESE RULES**
 - Rules at top of SPRINT-LOG.md are immutable
 - If rules need update: ADD new rules, don't erase old ones
 
@@ -111,43 +111,80 @@
 
 ## SPRINT HISTORY
 
-<!-- Example sprint entry (delete this after first real sprint) -->
+## Sprint 3: Production Refactoring, Test Coverage, and Release Infrastructure
 
-## Sprint 1: Project Setup and Initial Planning ✅
-
-**Date:** 2026-01-11  
-**Duration:** 14:00 - 16:30 (2.5 hours)
+**Date:** 2026-04-05
 
 ### Agents Participated
-- **COUNSELOR:** Kimi-K2 — Wrote SPEC.md and ARCHITECTURE.md
-- **ENGINEER** (invoked by COUNSELOR) — Created project structure
-- **AUDITOR** (invoked by COUNSELOR) — Verified spec compliance
+- **COUNSELOR** — Led all phases: refactoring plan, test strategy, release infrastructure planning, doc cleanup
+- **Pathfinder** — Codebase discovery (testable functions, release infrastructure, doc inventory, git remotes)
+- **Engineer** (x8) — Module path migration, test suites (4 packages), doc updates (README, SPEC, ARCHITECTURE, SPRINT-LOG)
+- **Auditor** (x3) — Release readiness audit, full test suite verification, final doc verification
+- **Researcher** — goreleaser research (signing hooks, cross-compilation, local release workflow)
 
-### Files Modified (8 total)
-- `SPEC.md:1-200` — Complete feature specification with all flows
-- `ARCHITECTURE.md:1-150` — Initial architecture patterns documented
-- `src/core/module.cpp:10-45` — Core module scaffolding with proper initialization
-- `src/core/module.h:1-30` — Core module header with explicit dependencies
-- `tests/core_test.cpp:1-50` — Test scaffolding following Testable principle
-- `CMakeLists.txt:1-25` — Build configuration with explicit targets
-- `README.md:1-20` — Project overview
+### Files Modified (88 files changed, 1741 insertions, 15180 deletions)
+
+**Release Infrastructure (new)**
+- `.goreleaser.yaml` — goreleaser v2 config: 6 targets (darwin/linux/windows x amd64/arm64), macOS codesign+notarize hooks, version injection via ldflags
+- `release.sh` — One-command release: commit, tag, push, goreleaser
+- `entitlements.plist` — macOS codesign entitlements (allow-unsigned-executable-memory, disable-library-validation)
+
+**Module Path Migration**
+- `go.mod` — `cake` to `github.com/jrengmusic/cake`
+- 26 `.go` files — all internal imports updated to new module path
+
+**Version Injection**
+- `internal/constants.go` — `AppVersion` changed from `const` to `var`, default `"dev"`, injected via `-ldflags -X`
+- `build.sh` — Added `git describe --tags` version detection and ldflags injection
+
+**Test Coverage (121 tests, all pass)**
+- `internal/banner/banner_test.go` — 18 tests: RGBToHex, CanvasToBrailleArray, SvgToBrailleArray, parseColor, normalizePathData, dominantPixelColor
+- `internal/config/config_test.go` — 14 tests: DefaultConfig, accessors, LastConfiguration fallback
+- `internal/state/state_test.go` — 39 tests: cycling, configuration, build info, paths, parseProjectCallName
+- `internal/ui/ui_test.go` — 50 tests: sizing, menu generation, OutputBuffer (incl. concurrent), ConsoleOutState, ConfirmationDialog, scroll helpers
+
+**Shortcut Fixes**
+- `internal/ui/menu.go` — Clean shortcut: `k` to `c`, Clean All: `ctrl+k` to `x`
+- `internal/app/app_handlers.go` — menuShortcutMap: `ctrl+k` to `x`/`X` for cleanAll
+
+**Documentation**
+- `README.md` — Public release install instructions (`go install`), `x` shortcut in nav table
+- `SPEC.md` — Version v0.0.1, added `c`/`x` shortcuts, 65/35 layout split
+- `ARCHITECTURE.md` — Full rewrite matching current codebase (decomposed files, context cancellation, handler maps, atomic buffer reads)
+- `carol/SPRINT-LOG.md` — Cleaned boilerplate, removed template sprint, updated repo URL
+- `REFACTORING-PLAN.md` — Deleted (completed work, lives in git history)
+
+**Prior Refactoring (from earlier in session, pre-compaction)**
+- Bug fixes: context-based build cancellation, atomic OutputBuffer.GetSnapshot()
+- Dead code removal: 4 files deleted, 15+ dead functions/methods removed
+- SSOT constants extracted to `internal/constants.go`
+- File decomposition: app.go (1117 to 282 lines), project.go, theme.go, menu.go, svg.go all split
+- Handler maps: menuShortcutMap, consoleLineColorMap, executePendingOperation
+- 60+ helper methods extracted to meet 30-line function limit
 
 ### Alignment Check
-- [x] LIFESTAR principles followed (Lean, Immutable, Findable, Explicit, SSOT, Testable, Accessible, Reviewable)
-- [x] NAMING-CONVENTION.md adhered (semantic names, verb-noun functions, no type encoding)
-- [x] ARCHITECTURAL-MANIFESTO.md principles applied (no layer violations, explicit dependencies)
-- [x] No early returns used
-- [x] Fail-fast error handling implemented
+- [x] BLESSED principles followed
+- [x] NAMES.md adhered
+- [x] MANIFESTO.md principles applied
+- [x] All files under 300 lines
+- [x] All functions under 30 lines (TEA Update exception accepted)
+- [x] No switches over 3 branches (type dispatches and data declarations accepted)
 
 ### Problems Solved
-- Established project foundation following domain-specific patterns
-- Defined clear module boundaries preventing layer violations
+- Zero test coverage to 121 tests across 4 packages
+- No release infrastructure to one-command `bash release.sh v0.0.1 "msg"` with cross-compilation and macOS signing
+- Bare module path `cake` blocked public `go install` — migrated to `github.com/jrengmusic/cake`
+- Hardcoded version string — now injected at build time via ldflags
+- Stale ARCHITECTURE.md referenced deleted files and dead methods — full rewrite
+- Clean shortcut `k` conflicted with vi navigation — changed to `c`
+- Clean All `ctrl+k` awkward — changed to `x`
 
 ### Technical Debt / Follow-up
-- Error handling needs refinement in module.cpp (marked with TODO)
-- Performance requirements not yet defined for real-time constraints
+- No tests for `internal/app` (bubbletea model — no viable unit test path) or `internal/ops` (subprocess-dependent)
+- `extractVisibleWindow` has minor edge case with negative offsets (not reachable in practice, documented in test)
+- TIT RFC written at `~/Documents/Poems/dev/tit/RFC.md` for identical release setup
 
-**Status:** ✅ APPROVED - All files compile, tests scaffold in place
+**Status:** Ready for release as v0.0.1
 
 ---
 
@@ -204,20 +241,3 @@
 - Ninja generator on Windows also needs vcvarsall env (for cl.exe) — currently works because vsEnv is passed to all cmake calls regardless of generator
 
 **Status:** APPROVED - VS 2026 detected, cmake generates successfully from cake
-
----
-
-<!-- Actual sprint entries go here, written by PRIMARY agents -->
-
----
-
-**End of SPRINT-LOG.md Template**
-
-Copy this template to your project root as `SPRINT-LOG.md` and customize:
-- Project name
-- Repository URL/path
-- Starting date
-- Add project-specific rules to CRITICAL RULES section
-
-Rock 'n Roll!  
-**JRENG!**

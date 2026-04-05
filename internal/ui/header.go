@@ -3,19 +3,16 @@ package ui
 import (
 	"strings"
 
-	"cake/internal"
-
 	"github.com/charmbracelet/lipgloss"
 )
 
 const EmojiColumnWidth = 3
 
-// HeaderState for CAKE - simplified from TIT (3-line format)
+// HeaderState for CAKE (3-line format)
 type HeaderState struct {
-	ProjectName  string
-	CWD          string
-	Version      string
-	VersionColor string
+	ProjectName string
+	CWD         string
+	Version     string
 }
 
 // RenderHeaderInfo renders CAKE header info (3 lines exactly)
@@ -47,8 +44,8 @@ func RenderHeaderInfo(sizing DynamicSizing, theme Theme, state HeaderState) stri
 		Foreground(lipgloss.Color(theme.SeparatorColor)).
 		Render(strings.Repeat("─", totalWidth))
 
-	// === LINE 4: Version (right-aligned, below separator, TIT pattern) ===
-	versionText := internal.AppVersion
+	// === LINE 4: Version (right-aligned, below separator) ===
+	versionText := state.Version
 	versionLine := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(theme.DimmedTextColor)).
 		Align(lipgloss.Right).
@@ -61,7 +58,7 @@ func RenderHeaderInfo(sizing DynamicSizing, theme Theme, state HeaderState) stri
 	return result
 }
 
-// RenderHeader renders header with margins (TIT pattern exactly)
+// RenderHeader renders header with margins
 func RenderHeader(sizing DynamicSizing, theme Theme, info string) string {
 	marginStyle := lipgloss.NewStyle().
 		PaddingLeft(HorizontalMargin).

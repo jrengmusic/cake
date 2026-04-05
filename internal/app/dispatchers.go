@@ -1,7 +1,7 @@
 package app
 
 import (
-	"cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

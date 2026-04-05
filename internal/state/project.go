@@ -1,12 +1,9 @@
 package state
 
 import (
-	"cake/internal/utils"
+	"github.com/jrengmusic/cake/internal"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
-	"strings"
 	"time"
 )
 
@@ -53,7 +50,7 @@ func NewProjectState() *ProjectState {
 		AvailableProjects: []Generator{},
 		SelectedProject:   "",
 		Builds:            make(map[string]BuildInfo),
-		Configuration:     "Debug",
+		Configuration:     internal.ConfigDebug,
 		IsPluginProject:   false,
 		RefreshInterval:   time.Second * 2,
 	}
@@ -82,7 +79,7 @@ func (ps *ProjectState) ForceRefresh() {
 	}
 	ps.WorkingDirectory = cwd
 
-	cmakePath := filepath.Join(cwd, "CMakeLists.txt")
+	cmakePath := filepath.Join(cwd, internal.CMakeListsFile)
 	_, err = os.Stat(cmakePath)
 	ps.HasCMakeLists = (err == nil)
 
@@ -98,55 +95,7 @@ func (ps *ProjectState) ForceRefresh() {
 
 // ShouldRefresh checks if refresh is needed based on interval
 func (ps *ProjectState) ShouldRefresh() bool {
-	if time.Since(ps.LastRefreshTime) > ps.RefreshInterval {
-		return true
-	}
-	return false
-}
-
-// DetectAvailableProjects checks which generators are available on the system
-func (ps *ProjectState) DetectAvailableProjects() {
-	ps.AvailableProjects = []Generator{}
-
-	// Check Xcode (macOS only)
-	if runtime.GOOS == "darwin" {
-		if ps.checkCommandExists("xcodebuild") {
-			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
-				Name:  "Xcode",
-				IsIDE: true,
-			})
-		}
-	}
-
-	// Check Ninja (cross-platform)
-	if ps.checkCommandExists("ninja") {
-		ps.AvailableProjects = append(ps.AvailableProjects, Generator{
-			Name:  "Ninja",
-			IsIDE: false,
-		})
-	}
-
-	// Check Visual Studio (Windows only)
-	if runtime.GOOS == "windows" {
-		vsGenerators := ps.checkVSGeneratorAvailable()
-		for _, vsGen := range vsGenerators {
-			ps.AvailableProjects = append(ps.AvailableProjects, Generator{
-				Name:  vsGen,
-				IsIDE: true,
-			})
-		}
-	}
-}
-
-// checkCommandExists tests if a command is available in PATH
-func (ps *ProjectState) checkCommandExists(cmd string) bool {
-	_, err := exec.LookPath(cmd)
-	return err == nil
-}
-
-// checkVSGeneratorAvailable returns generator strings for all installed VS versions
-func (ps *ProjectState) checkVSGeneratorAvailable() []string {
-	return utils.DetectInstalledVSVersions()
+	return time.Since(ps.LastRefreshTime) > ps.RefreshInterval
 }
 
 // CycleToNextProject advances to the next available project
@@ -200,16 +149,16 @@ func (ps *ProjectState) CycleToPrevProject() {
 
 // CycleConfiguration toggles between Debug and Release
 func (ps *ProjectState) CycleConfiguration() {
-	if ps.Configuration == "Debug" {
-		ps.Configuration = "Release"
+	if ps.Configuration == internal.ConfigDebug {
+		ps.Configuration = internal.ConfigRelease
 	} else {
-		ps.Configuration = "Debug"
+		ps.Configuration = internal.ConfigDebug
 	}
 }
 
 // SetConfiguration sets the configuration directly (used for restoring from config)
 func (ps *ProjectState) SetConfiguration(configuration string) {
-	if configuration == "Debug" || configuration == "Release" {
+	if configuration == internal.ConfigDebug || configuration == internal.ConfigRelease {
 		ps.Configuration = configuration
 	}
 }
@@ -232,77 +181,7 @@ func (ps *ProjectState) GetBuildPath() string {
 	if ps.SelectedProject == "" {
 		return ""
 	}
-
-	gen := ps.SelectedProject
-	// All projects are multi-config: Builds/<dir>/
-	return filepath.Join(ps.WorkingDirectory, "Builds", utils.GetDirectoryName(gen))
-}
-
-// GetBuildDirectory returns the build directory path for given project and config
-func (ps *ProjectState) GetBuildDirectory(generatorName string, config string) string {
-	// All projects are multi-config: Builds/<dir>/
-	return filepath.Join(ps.WorkingDirectory, "Builds", utils.GetDirectoryName(generatorName))
-}
-
-// scanBuildDirectories scans for existing build directories
-func (ps *ProjectState) scanBuildDirectories(rootDir string) {
-	ps.Builds = make(map[string]BuildInfo)
-
-	buildsDir := filepath.Join(rootDir, "Builds")
-
-	entries, err := os.ReadDir(buildsDir)
-	if err != nil {
-		return
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-
-		dirName := entry.Name()
-		buildPath := filepath.Join(buildsDir, dirName)
-
-		buildInfo := BuildInfo{
-			Generator: utils.GetGeneratorNameFromDirectory(dirName),
-			Path:      buildPath,
-			Exists:    true,
-		}
-
-		// Check if configured (CMakeCache.txt exists)
-		cachePath := filepath.Join(buildPath, "CMakeCache.txt")
-		if _, err := os.Stat(cachePath); err == nil {
-			buildInfo.IsConfigured = true
-
-			// All projects are multi-config, detect available configurations
-			buildInfo.Configs = ps.detectConfigurations(buildPath)
-		}
-
-		ps.Builds[utils.GetGeneratorNameFromDirectory(dirName)] = buildInfo
-	}
-}
-
-// detectConfigurations scans for available build configurations
-func (ps *ProjectState) detectConfigurations(buildPath string) []string {
-	var configs []string
-
-	entries, err := os.ReadDir(buildPath)
-	if err != nil {
-		return configs
-	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			// Check if this looks like a configuration directory
-			configName := entry.Name()
-			if configName == "Debug" || configName == "Release" ||
-				configName == "RelWithDebInfo" || configName == "MinSizeRel" {
-				configs = append(configs, configName)
-			}
-		}
-	}
-
-	return configs
+	return ps.GetBuildDirectory(ps.SelectedProject)
 }
 
 // GetSelectedBuildInfo returns the build info for the selected project
@@ -344,7 +223,7 @@ func (ps *ProjectState) CanOpenEditor() bool {
 // HasBuildsToClean returns true if Builds/ directory exists and has content
 // This is used to determine if Clean All should be available
 func (ps *ProjectState) HasBuildsToClean() bool {
-	buildsDir := filepath.Join(ps.WorkingDirectory, "Builds")
+	buildsDir := filepath.Join(ps.WorkingDirectory, internal.BuildsDirName)
 
 	// Check if Builds directory exists
 	info, err := os.Stat(buildsDir)
@@ -359,176 +238,4 @@ func (ps *ProjectState) HasBuildsToClean() bool {
 	}
 
 	return len(entries) > 0
-}
-
-// GetProjectLabel returns a display-friendly project name
-func (ps *ProjectState) GetProjectLabel() string {
-	name := ps.SelectedProject
-
-	// Truncate long names for display
-	switch name {
-	case "Visual Studio 18 2026":
-		return "VS 2026"
-	case "Visual Studio 17 2022":
-		return "VS 2022"
-	default:
-		return name
-	}
-}
-
-// GetProjectName extracts project name using layered file parsing
-// Priority: KANJUT Parameters.xml > set(PROJECT_NAME) > project() literal > directory name
-func (ps *ProjectState) GetProjectName() string {
-	// Layer 1: KANJUT Parameters.xml
-	if name := ps.extractFromParametersXML(); name != "" {
-		return name
-	}
-
-	// Layer 2: set(PROJECT_NAME "...") in CMakeLists.txt
-	if name := ps.extractFromSetProjectName(); name != "" {
-		return name
-	}
-
-	// Layer 3: project(LiteralName) in CMakeLists.txt
-	if name := ps.extractFromProjectCall(); name != "" {
-		return name
-	}
-
-	// Layer 4: Fallback to project working directory
-	return filepath.Base(ps.WorkingDirectory)
-}
-
-// extractFromParametersXML parses KANJUT's Parameters.xml for PRODUCT name attribute
-func (ps *ProjectState) extractFromParametersXML() string {
-	paramsPath := filepath.Join(ps.WorkingDirectory, "Source", "layout", "Parameters.xml")
-
-	data, err := os.ReadFile(paramsPath)
-	if err != nil {
-		return ""
-	}
-
-	content := string(data)
-
-	// Find <PRODUCT ... name="..." ...>
-	productIdx := strings.Index(content, "<PRODUCT")
-	if productIdx == -1 {
-		return ""
-	}
-
-	// Find closing > of PRODUCT tag
-	closeIdx := strings.Index(content[productIdx:], ">")
-	if closeIdx == -1 {
-		return ""
-	}
-
-	productTag := content[productIdx : productIdx+closeIdx]
-
-	// Extract name="value"
-	nameIdx := strings.Index(productTag, `name="`)
-	if nameIdx == -1 {
-		return ""
-	}
-
-	valueStart := nameIdx + 6 // len(`name="`)
-	valueEnd := strings.Index(productTag[valueStart:], `"`)
-	if valueEnd == -1 {
-		return ""
-	}
-
-	return productTag[valueStart : valueStart+valueEnd]
-}
-
-// extractFromSetProjectName parses set(PROJECT_NAME "...") from CMakeLists.txt
-func (ps *ProjectState) extractFromSetProjectName() string {
-	cmakePath := filepath.Join(ps.WorkingDirectory, "CMakeLists.txt")
-
-	data, err := os.ReadFile(cmakePath)
-	if err != nil {
-		return ""
-	}
-
-	content := string(data)
-	lines := strings.Split(content, "\n")
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		// Match: set(PROJECT_NAME "value") or set(PROJECT_NAME "value" ...)
-		if strings.HasPrefix(strings.ToLower(trimmed), "set(project_name") {
-			// Find first quoted string
-			quoteStart := strings.Index(trimmed, `"`)
-			if quoteStart == -1 {
-				continue
-			}
-			quoteEnd := strings.Index(trimmed[quoteStart+1:], `"`)
-			if quoteEnd == -1 {
-				continue
-			}
-			return trimmed[quoteStart+1 : quoteStart+1+quoteEnd]
-		}
-	}
-
-	return ""
-}
-
-// extractFromProjectCall parses project(Name) from CMakeLists.txt (literal names only)
-func (ps *ProjectState) extractFromProjectCall() string {
-	cmakePath := filepath.Join(ps.WorkingDirectory, "CMakeLists.txt")
-
-	data, err := os.ReadFile(cmakePath)
-	if err != nil {
-		return ""
-	}
-
-	content := string(data)
-	lines := strings.Split(content, "\n")
-
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		lowerTrimmed := strings.ToLower(trimmed)
-
-		// Match: project( at start of line
-		if !strings.HasPrefix(lowerTrimmed, "project(") {
-			continue
-		}
-
-		// Extract content after "project("
-		parenStart := strings.Index(trimmed, "(")
-		if parenStart == -1 {
-			continue
-		}
-
-		rest := trimmed[parenStart+1:]
-
-		// Skip if contains variable reference
-		if strings.Contains(rest, "$") {
-			return ""
-		}
-
-		// Handle quoted: project("Name" ...)
-		if strings.HasPrefix(strings.TrimSpace(rest), `"`) {
-			quoteStart := strings.Index(rest, `"`)
-			quoteEnd := strings.Index(rest[quoteStart+1:], `"`)
-			if quoteEnd != -1 {
-				return rest[quoteStart+1 : quoteStart+1+quoteEnd]
-			}
-		}
-
-		// Handle unquoted: project(Name) or project(Name VERSION ...)
-		// Extract first token (alphanumeric + underscore + hyphen)
-		var name strings.Builder
-		for _, ch := range strings.TrimSpace(rest) {
-			if ch == ' ' || ch == '\t' || ch == ')' || ch == '"' {
-				break
-			}
-			name.WriteRune(ch)
-		}
-
-		result := name.String()
-		if result != "" && !strings.Contains(result, "$") {
-			return result
-		}
-	}
-
-	return ""
 }

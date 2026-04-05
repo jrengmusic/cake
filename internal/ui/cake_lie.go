@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"cake/internal/banner"
+	"github.com/jrengmusic/cake/internal/banner"
 	"embed"
 	"strings"
 
@@ -44,17 +44,4 @@ func RenderCakeLieBanner(width, height int) string {
 	}
 
 	return output.String()
-}
-
-// RenderInvalidProjectFooter renders the footer for invalid project mode
-// "The cake is a lie" centered at bottom
-func RenderInvalidProjectFooter(width int, theme Theme) string {
-	message := "The cake is a lie"
-
-	messageStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color(theme.DimmedTextColor)).
-		Align(lipgloss.Center).
-		Width(width)
-
-	return messageStyle.Render(message)
 }

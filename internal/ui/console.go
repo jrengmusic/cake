@@ -44,7 +44,6 @@ func (s *ConsoleOutState) ScrollDown() {
 
 // RenderConsoleOutput renders console output for full-screen mode (footer handled externally)
 // Takes terminal dimensions directly, returns content that occupies full terminal
-// Pattern matches RenderHistorySplitPane: content only, footer handled externally
 func RenderConsoleOutput(
 	state *ConsoleOutState,
 	buffer *OutputBuffer,
@@ -59,45 +58,41 @@ func RenderConsoleOutput(
 		return ""
 	}
 
-	// Calculate console height: full terminal height
 	consoleHeight := totalHeight
-
-	// Content lines available (title + content = 1 line used, no blank line)
-	// No status bar, so content gets full height minus title
 	titleHeight := 1
 	contentHeight := consoleHeight - titleHeight
-
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
-
-	wrapWidth := maxWidth - 2 // Account for 1-cell left/right padding
+	wrapWidth := maxWidth - 2
 
 	state.LinesPerPage = contentHeight
 
-	// Color mapping function (semantic colors from new theme)
-	getColor := func(lineType OutputLineType) string {
-		switch lineType {
-		case TypeStdout:
-			return palette.OutputStdoutColor
-		case TypeStderr:
-			return palette.OutputStderrColor
-		case TypeCommand:
-			return palette.OutputStdoutColor
-		case TypeStatus:
-			return palette.OutputStatusColor
-		case TypeWarning:
-			return palette.OutputWarningColor
-		case TypeDebug:
-			return palette.OutputDebugColor
-		case TypeInfo:
-			return palette.OutputInfoColor
-		default:
-			return palette.OutputStdoutColor
-		}
-	}
+	allOutputLines := formatBufferLines(buffer, palette, wrapWidth)
+	applyScrollState(state, allOutputLines, contentHeight, autoScroll)
 
-	totalBufferLines := buffer.GetLineCount()
+	visibleLines := extractVisibleWindow(allOutputLines, state.ScrollOffset, contentHeight)
+	visibleLines = padLinesToWidth(visibleLines, wrapWidth)
+	visibleLines = padLinesToHeight(visibleLines, contentHeight, wrapWidth)
+
+	panel := assembleConsolePanel(visibleLines, palette, wrapWidth, consoleHeight)
+	return lipgloss.NewStyle().Padding(0, 1).Render(panel)
+}
+
+func consoleLineColorMap(palette Theme) map[OutputLineType]string {
+	return map[OutputLineType]string{
+		TypeStdout:  palette.OutputStdoutColor,
+		TypeStderr:  palette.OutputStderrColor,
+		TypeCommand: palette.OutputStdoutColor,
+		TypeStatus:  palette.OutputStatusColor,
+		TypeWarning: palette.OutputWarningColor,
+		TypeDebug:   palette.OutputDebugColor,
+		TypeInfo:    palette.OutputInfoColor,
+	}
+}
+
+func formatBufferLines(buffer *OutputBuffer, palette Theme, wrapWidth int) []string {
+	snapshotLines, totalBufferLines := buffer.GetSnapshot()
 
 	var allOutputLines []string
 
@@ -106,44 +101,46 @@ func RenderConsoleOutput(
 			Foreground(lipgloss.Color(palette.DimmedTextColor)).
 			Italic(true)
 		allOutputLines = append(allOutputLines, emptyStyle.Render("(no output yet)"))
-	} else {
-		displayLines := buffer.GetLines(0, totalBufferLines)
-		for _, line := range displayLines {
-			lineStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(getColor(line.Type)))
-
-			formatted := fmt.Sprintf("[%s] %s", line.Time, line.Text)
-			renderedLine := lineStyle.Width(wrapWidth).Render(formatted)
-			renderedLines := strings.Split(renderedLine, "\n")
-			allOutputLines = append(allOutputLines, renderedLines...)
-		}
+		return allOutputLines
 	}
 
-	// Calculate scroll bounds
+	colorMap := consoleLineColorMap(palette)
+	for _, line := range snapshotLines {
+		color := colorMap[line.Type]
+		if color == "" {
+			color = palette.OutputStdoutColor
+		}
+		lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+		formatted := fmt.Sprintf("[%s] %s", line.Time, line.Text)
+		renderedLine := lineStyle.Width(wrapWidth).Render(formatted)
+		allOutputLines = append(allOutputLines, strings.Split(renderedLine, "\n")...)
+	}
+	return allOutputLines
+}
+
+func applyScrollState(state *ConsoleOutState, allOutputLines []string, contentHeight int, autoScroll bool) {
 	totalOutputLines := len(allOutputLines)
 	maxScroll := totalOutputLines - contentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
-
 	state.MaxScroll = maxScroll
 
-	// Auto-scroll: if enabled, stay at bottom
 	if autoScroll {
 		state.ScrollOffset = maxScroll
-	} else {
-		// Manual scroll: clamp to valid range
-		if state.ScrollOffset > maxScroll {
-			state.ScrollOffset = maxScroll
-		}
-		if state.ScrollOffset < 0 {
-			state.ScrollOffset = 0
-		}
+		return
 	}
 
-	scrollOffset := int(state.ScrollOffset)
+	if state.ScrollOffset > maxScroll {
+		state.ScrollOffset = maxScroll
+	}
+	if state.ScrollOffset < 0 {
+		state.ScrollOffset = 0
+	}
+}
 
-	// Extract visible window
+func extractVisibleWindow(allOutputLines []string, scrollOffset int, contentHeight int) []string {
+	totalOutputLines := len(allOutputLines)
 	start := scrollOffset
 	end := start + contentHeight
 	if start < 0 {
@@ -157,46 +154,43 @@ func RenderConsoleOutput(
 	for i := start; i < end; i++ {
 		visibleLines = append(visibleLines, allOutputLines[i])
 	}
+	return visibleLines
+}
 
-	// Pad each visible line to wrapWidth
-	for i := range visibleLines {
-		lineWidth := lipgloss.Width(visibleLines[i])
+func padLinesToWidth(lines []string, wrapWidth int) []string {
+	for i := range lines {
+		lineWidth := lipgloss.Width(lines[i])
 		if lineWidth < wrapWidth {
-			visibleLines[i] = visibleLines[i] + strings.Repeat(" ", wrapWidth-lineWidth)
+			lines[i] = lines[i] + strings.Repeat(" ", wrapWidth-lineWidth)
 		}
 	}
+	return lines
+}
 
-	// Pad to exactly contentHeight
+func padLinesToHeight(lines []string, contentHeight int, wrapWidth int) []string {
 	emptyLine := strings.Repeat(" ", wrapWidth)
-	for len(visibleLines) < contentHeight {
-		visibleLines = append(visibleLines, emptyLine)
+	for len(lines) < contentHeight {
+		lines = append(lines, emptyLine)
 	}
+	return lines
+}
 
-	// Content without inner box border
-	contentBox := strings.Join(visibleLines, "\n")
-
-	// Build title
+func assembleConsolePanel(visibleLines []string, palette Theme, wrapWidth int, consoleHeight int) string {
 	titleStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(palette.OutputInfoColor)).
 		Bold(true)
 
-	titleText := "OUTPUT"
-	title := titleStyle.Render(titleText)
+	title := titleStyle.Render("OUTPUT")
 	titleWidth := lipgloss.Width(title)
 	if titleWidth < wrapWidth {
 		title = title + strings.Repeat(" ", wrapWidth-titleWidth)
 	}
 
-	// Build blank line (for padding only, not between title and content)
 	blankLine := strings.Repeat(" ", wrapWidth)
+	contentBox := strings.Join(visibleLines, "\n")
 
-	// Combine: title + contentBox (no blank line between - TIT pattern optimized)
-	panel := lipgloss.JoinVertical(lipgloss.Left,
-		title,
-		contentBox,
-	)
+	panel := lipgloss.JoinVertical(lipgloss.Left, title, contentBox)
 
-	// Pad panel to exact height (consoleHeight for full content, footer handled externally)
 	panelLines := strings.Split(panel, "\n")
 	for len(panelLines) < consoleHeight {
 		panelLines = append(panelLines, blankLine)
@@ -204,8 +198,5 @@ func RenderConsoleOutput(
 	if len(panelLines) > consoleHeight {
 		panelLines = panelLines[:consoleHeight]
 	}
-	panel = strings.Join(panelLines, "\n")
-
-	// Return panel only (footer handled externally)
-	return lipgloss.NewStyle().Padding(0, 1).Render(panel)
+	return strings.Join(panelLines, "\n")
 }

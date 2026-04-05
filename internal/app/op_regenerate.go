@@ -5,18 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"cake/internal/ops"
-	"cake/internal/ui"
-	"cake/internal/utils"
+	"github.com/jrengmusic/cake/internal"
+	"github.com/jrengmusic/cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 func (a *Application) startRegenerateOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncState.Start()
-	a.outputBuffer.Clear()
-	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
-	a.footerHint = "Regenerating project..."
+	a.enterConsoleMode("Regenerating project...")
 
 	// Create cancellable context for process termination
 	ctx, cancel := context.WithCancel(context.Background())
@@ -31,7 +28,7 @@ func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 
 		project := a.projectState.SelectedProject
 		projectRoot := a.projectState.WorkingDirectory
-		buildDir := filepath.Join(projectRoot, "Builds", utils.GetDirectoryName(project))
+		buildDir := filepath.Join(projectRoot, internal.BuildsDirName, utils.GetDirectoryName(project))
 
 		// Step 1: Clean
 		appendCallback("=== Step 1: Clean ===", ui.TypeInfo)

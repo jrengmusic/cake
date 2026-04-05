@@ -1,7 +1,8 @@
 package utils
 
 import (
-	"cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/ui"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -14,16 +15,16 @@ import (
 func StreamCommand(cmd *exec.Cmd, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) error {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("stream: stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return err
+		return fmt.Errorf("stream: stderr pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
-		return err
+		return fmt.Errorf("stream: start command: %w", err)
 	}
 
 	var wg sync.WaitGroup
@@ -46,8 +47,20 @@ func StreamCommand(cmd *exec.Cmd, appendCallback func(string, ui.OutputLineType)
 	return nil
 }
 
+// flushLine emits a non-empty line via the appropriate callback based on progress state
+func flushLine(line string, lineType ui.OutputLineType, isProgress bool, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) {
+	if line == "" {
+		return
+	}
+	if isProgress {
+		replaceCallback(line, lineType)
+	} else {
+		appendCallback(line, lineType)
+	}
+}
+
 // streamPipe reads byte-by-byte from a reader, handling \n and \r line terminators.
-// Tracks isProgressLine state per TIT pattern:
+// Tracks isProgressLine state:
 //   - First \r on a line: append normally, mark as progress
 //   - Subsequent \r while progress: replace last line
 //   - \n: flush (replace if progress, append if not), reset progress flag
@@ -63,25 +76,16 @@ func streamPipe(r io.Reader, lineType ui.OutputLineType, appendCallback func(str
 			ch := oneByte[0]
 			switch ch {
 			case '\n':
-				line := strings.TrimSpace(currentLine.String())
-				if line != "" {
-					if isProgressLine {
-						replaceCallback(line, lineType)
-					} else {
-						appendCallback(line, lineType)
-					}
-				}
+				flushLine(strings.TrimSpace(currentLine.String()), lineType, isProgressLine, appendCallback, replaceCallback)
 				currentLine.Reset()
 				isProgressLine = false
 			case '\r':
 				line := strings.TrimSpace(currentLine.String())
-				if line != "" {
-					if isProgressLine {
-						replaceCallback(line, lineType)
-					} else {
-						appendCallback(line, lineType)
-						isProgressLine = true
-					}
+				if line != "" && !isProgressLine {
+					appendCallback(line, lineType)
+					isProgressLine = true
+				} else {
+					flushLine(line, lineType, isProgressLine, appendCallback, replaceCallback)
 				}
 				currentLine.Reset()
 			default:
@@ -89,14 +93,7 @@ func streamPipe(r io.Reader, lineType ui.OutputLineType, appendCallback func(str
 			}
 		}
 		if err == io.EOF {
-			line := strings.TrimSpace(currentLine.String())
-			if line != "" {
-				if isProgressLine {
-					replaceCallback(line, lineType)
-				} else {
-					appendCallback(line, lineType)
-				}
-			}
+			flushLine(strings.TrimSpace(currentLine.String()), lineType, isProgressLine, appendCallback, replaceCallback)
 			break
 		}
 		if err != nil {

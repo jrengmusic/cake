@@ -2,9 +2,8 @@ package ui
 
 import (
 	"fmt"
-	"strings"
 
-	"cake/internal/config"
+	"github.com/jrengmusic/cake/internal/config"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -43,132 +42,61 @@ func RenderPreferencesMenu(rows []PreferenceRow, selectedIndex int, theme Theme,
 		return ""
 	}
 
-	// Column widths (no shortcut column)
-	emojiColWidth := 3
-	labelColWidth := 18
-	valueColWidth := 10
+	emojiColWidth, labelColWidth, valueColWidth := calcPrefColWidths(contentWidth)
+	menuBoxWidth := emojiColWidth + labelColWidth + valueColWidth
 
-	// Dynamically shrink label if content is too narrow
+	lines := buildPrefLines(rows, selectedIndex, theme, emojiColWidth, labelColWidth, valueColWidth)
+
+	return assembleMenuOutput(lines, contentHeight, contentWidth, menuBoxWidth)
+}
+
+func calcPrefColWidths(contentWidth int) (emojiColWidth, labelColWidth, valueColWidth int) {
+	emojiColWidth = 3
+	labelColWidth = 18
+	valueColWidth = 10
+
 	if contentWidth < (emojiColWidth + labelColWidth + valueColWidth) {
 		labelColWidth = contentWidth - emojiColWidth - valueColWidth
 		if labelColWidth < 0 {
 			labelColWidth = 0
 		}
 	}
+	return
+}
 
-	menuBoxWidth := emojiColWidth + labelColWidth + valueColWidth
-
+func buildPrefLines(rows []PreferenceRow, selectedIndex int, theme Theme, emojiColWidth, labelColWidth, valueColWidth int) []string {
 	var lines []string
 	for i, row := range rows {
-		// Column 1: EMOJI (center-aligned)
-		emojiCol := row.Emoji
-		emojiW := lipgloss.Width(emojiCol)
-		leftPad := (emojiColWidth - emojiW) / 2
-		rightPad := emojiColWidth - emojiW - leftPad
-		if leftPad < 0 {
-			leftPad = 0
-		}
-		if rightPad < 0 {
-			rightPad = 0
-		}
-		emojiCol = strings.Repeat(" ", leftPad) + emojiCol + strings.Repeat(" ", rightPad)
+		emojiCol := renderEmojiCol(row.Emoji, emojiColWidth)
+		labelCol := renderLabelCol(row.Label, labelColWidth)
+		valueCol := renderValueCol(row.Value, valueColWidth)
 
-		// Column 2: LABEL (left-aligned)
-		labelCol := row.Label
-		labelW := lipgloss.Width(labelCol)
-		if labelW > labelColWidth {
-			labelCol = labelCol[:labelColWidth]
-			labelW = labelColWidth
-		}
-		labelCol = labelCol + strings.Repeat(" ", labelColWidth-labelW)
-
-		// Column 3: VALUE (right-aligned)
-		valueCol := row.Value
-		valueW := lipgloss.Width(valueCol)
-		if valueW > valueColWidth {
-			valueCol = valueCol[:valueColWidth]
-			valueW = valueColWidth
-		}
-		valueCol = strings.Repeat(" ", valueColWidth-valueW) + valueCol
-
-		// Build styled line
 		var styledLine string
-
 		if i == selectedIndex {
-			// Selected: highlight label+value
-			emojiStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.LabelTextColor))
-			labelStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.MainBackgroundColor)).
-				Background(lipgloss.Color(theme.MenuSelectionBackground)).
-				Bold(true)
-			valueStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.AccentTextColor)).
-				Bold(true)
-			styledLine = emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol) + valueStyle.Render(valueCol)
+			styledLine = styleSelectedPrefRow(emojiCol, labelCol, valueCol, theme)
 		} else {
-			// Normal
-			emojiStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.LabelTextColor))
-			labelStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.LabelTextColor))
-			valueStyle := lipgloss.NewStyle().
-				Foreground(lipgloss.Color(theme.ContentTextColor))
-			styledLine = emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol) + valueStyle.Render(valueCol)
+			styledLine = styleNormalPrefRow(emojiCol, labelCol, valueCol, theme)
 		}
-
 		lines = append(lines, styledLine)
 	}
+	return lines
+}
 
-	// Center menu vertically and horizontally
-	innerHeight := contentHeight - 2
-	menuHeight := len(lines)
-	topPad := (innerHeight - menuHeight) / 2
-	if topPad < 0 {
-		topPad = 0
-	}
-	bottomPad := innerHeight - menuHeight - topPad
-	if bottomPad < 0 {
-		bottomPad = 0
-	}
+func styleSelectedPrefRow(emojiCol, labelCol, valueCol string, theme Theme) string {
+	emojiStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.LabelTextColor))
+	labelStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(theme.MainBackgroundColor)).
+		Background(lipgloss.Color(theme.MenuSelectionBackground)).
+		Bold(true)
+	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.AccentTextColor)).Bold(true)
+	return emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol) + valueStyle.Render(valueCol)
+}
 
-	leftPad := (contentWidth - menuBoxWidth) / 2
-	if leftPad < 0 {
-		leftPad = 0
-	}
-
-	var result strings.Builder
-
-	// Top padding
-	for i := 0; i < topPad; i++ {
-		result.WriteString(strings.Repeat(" ", contentWidth))
-		if i < topPad-1 || menuHeight > 0 {
-			result.WriteString("\n")
-		}
-	}
-
-	// Menu lines
-	for i, line := range lines {
-		centeredLine := strings.Repeat(" ", leftPad) + line
-		lineWidth := lipgloss.Width(centeredLine)
-		if lineWidth < contentWidth {
-			centeredLine = centeredLine + strings.Repeat(" ", contentWidth-lineWidth)
-		}
-		result.WriteString(centeredLine)
-		if i < len(lines)-1 || bottomPad > 0 {
-			result.WriteString("\n")
-		}
-	}
-
-	// Bottom padding
-	for i := 0; i < bottomPad; i++ {
-		result.WriteString(strings.Repeat(" ", contentWidth))
-		if i < bottomPad-1 {
-			result.WriteString("\n")
-		}
-	}
-
-	return result.String()
+func styleNormalPrefRow(emojiCol, labelCol, valueCol string, theme Theme) string {
+	emojiStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.LabelTextColor))
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.LabelTextColor))
+	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.ContentTextColor))
+	return emojiStyle.Render(emojiCol) + labelStyle.Render(labelCol) + valueStyle.Render(valueCol)
 }
 
 // RenderPreferencesWithBanner renders preferences (left) + banner (right)

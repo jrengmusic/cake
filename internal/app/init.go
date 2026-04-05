@@ -1,70 +1,68 @@
 package app
 
 import (
-	"cake/internal/config"
-	"cake/internal/state"
-	"cake/internal/ui"
-	"cake/internal/utils"
+	"github.com/jrengmusic/cake/internal/config"
+	"github.com/jrengmusic/cake/internal/state"
+	"github.com/jrengmusic/cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/utils"
 	"time"
 )
+
+func loadTheme(cfg *config.Config) ui.Theme {
+	if cfg != nil {
+		// theme load failure is non-fatal: fall through to default
+		theme, _ := ui.LoadThemeByName(cfg.Theme())
+		if theme.MainBackgroundColor != "" {
+			return theme
+		}
+	}
+	// theme load failure is non-fatal: fall through to zero value
+	theme, _ := ui.LoadDefaultTheme()
+	return theme
+}
+
+func captureVSEnvironment() []string {
+	vcVarsAllPath, vsErr := utils.FindVCVarsAll()
+	if vsErr != nil {
+		return nil
+	}
+	// VS env capture failure is non-fatal: build operations fall back to system PATH
+	capturedVSEnv, _ := utils.CaptureVSEnv(vcVarsAllPath)
+	return capturedVSEnv
+}
+
+func initialModeAndHint(projectState *state.ProjectState, cfg *config.Config) (AppMode, string) {
+	if !projectState.HasCMakeLists {
+		return ModeInvalidProject, "The cake is a lie"
+	}
+
+	if cfg != nil {
+		if lastProject := cfg.LastProject(); lastProject != "" {
+			projectState.SetSelectedProject(lastProject)
+		}
+		if lastConfig := cfg.LastConfiguration(); lastConfig != "" {
+			projectState.SetConfiguration(lastConfig)
+		}
+	}
+	return ModeMenu, FooterHints["menu_navigate"]
+}
 
 func NewApplication() *Application {
 	// Create theme files if missing
 	ui.CreateDefaultThemeIfMissing()
 
-	// Load configuration
+	// config load failure is non-fatal: defaults used
 	cfg, _ := config.Load()
+	theme := loadTheme(cfg)
 
-	// Load theme from config (default: gfx)
-	var theme ui.Theme
-	if cfg != nil {
-		theme, _ = ui.LoadThemeByName(cfg.Theme())
-		if theme.MainBackgroundColor == "" {
-			theme, _ = ui.LoadDefaultTheme()
-		}
-	} else {
-		theme, _ = ui.LoadDefaultTheme()
-	}
-
-	// Create project state and refresh to detect CMakeLists.txt
 	projectState := state.NewProjectState()
-	projectState.ForceRefresh() // This populates HasCMakeLists
+	projectState.ForceRefresh()
 
-	// Capture Visual Studio environment on Windows (enables cmake invocation)
-	vcVarsAllPath, vsErr := utils.FindVCVarsAll()
-	var capturedVSEnv []string
-	if vsErr == nil {
-		capturedVSEnv, _ = utils.CaptureVSEnv(vcVarsAllPath)
-	}
-
-	// Check if current directory is a valid CMake project
-	isValidProject := projectState.HasCMakeLists
-
-	var initialMode AppMode
-	var footerHint string
-	if isValidProject {
-		// Valid CMake project - start in menu mode
-		initialMode = ModeMenu
-		footerHint = FooterHints["menu_navigate"]
-
-		// Restore last chosen options from config
-		if cfg != nil {
-			if lastProject := cfg.LastProject(); lastProject != "" {
-				projectState.SetSelectedProject(lastProject)
-			}
-			if lastConfig := cfg.LastConfiguration(); lastConfig != "" {
-				projectState.SetConfiguration(lastConfig)
-			}
-		}
-	} else {
-		// Not a CMake project - show "cake is a lie" mode
-		initialMode = ModeInvalidProject
-		footerHint = "The cake is a lie"
-	}
+	initialMode, footerHint := initialModeAndHint(projectState, cfg)
 
 	return &Application{
-		width:           80,
-		height:          24,
+		width:           DefaultTerminalWidth,
+		height:          DefaultTerminalHeight,
 		theme:           theme,
 		sizing:          ui.NewDynamicSizing(),
 		mode:            initialMode,
@@ -75,6 +73,6 @@ func NewApplication() *Application {
 		outputBuffer:    ui.GetBuffer(),
 		footerHint:      footerHint,
 		quitConfirmTime: time.Now(),
-		vsEnv:           capturedVSEnv,
+		vsEnv:           captureVSEnvironment(),
 	}
 }

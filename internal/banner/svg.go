@@ -37,6 +37,7 @@ type Intersection struct {
 }
 
 // extractSvgDimensions extracts width/height from SVG string
+// SVG numeric parsing: malformed values default to zero, producing degraded but safe render
 func extractSvgDimensions(svgString string) (width, height float64) {
 	// Try explicit width/height attributes
 	widthRe := regexp.MustCompile(`width\s*=\s*["']?(\d+(?:\.\d+)?)`)
@@ -70,93 +71,126 @@ func extractSvgDimensions(svgString string) (width, height float64) {
 	return 400, 320
 }
 
-// parseFillPaths extracts all fill paths with colors from SVG
-func parseFillPaths(svgString string) []struct {
-	Subpaths [][]Point
-	Color    Color
-} {
-	var fillPaths []struct {
-		Subpaths [][]Point
-		Color    Color
+// handleMoveToCommand handles M/m SVG path commands
+func handleMoveToCommand(cmd string, tokens []string, i int, currentPath []Point, currentPos Point, subpaths [][]Point) ([][]Point, []Point, Point, *Point, int) {
+	if len(currentPath) > 0 {
+		subpaths = append(subpaths, currentPath)
+		currentPath = nil
 	}
-
-	// Extract all <path> elements (handles multi-line paths and both /> and > closings)
-	pathRe := regexp.MustCompile(`(?s)<path\s+([^>]*)>`)
-	matches := pathRe.FindAllStringSubmatch(svgString, -1)
-
-	for _, match := range matches {
-		if len(match) < 2 {
-			continue
+	if i+2 < len(tokens) {
+		x, _ := strconv.ParseFloat(tokens[i+1], 64)
+		y, _ := strconv.ParseFloat(tokens[i+2], 64)
+		if cmd == "M" {
+			currentPos = Point{x, y}
+		} else {
+			currentPos = Point{currentPos.X + x, currentPos.Y + y}
 		}
-		pathAttrs := match[1]
-
-		// Extract d attribute (path data)
-		dRe := regexp.MustCompile(`d="([^"]*)`)
-		dMatch := dRe.FindStringSubmatch(pathAttrs)
-		if len(dMatch) < 2 {
-			continue
-		}
-		pathData := dMatch[1]
-
-		// Extract style attribute
-		styleRe := regexp.MustCompile(`style="([^"]*)`)
-		styleMatch := styleRe.FindStringSubmatch(pathAttrs)
-		if len(styleMatch) < 2 {
-			continue
-		}
-		style := styleMatch[1]
-
-		// Check if it has fill (not fill:none)
-		if strings.Contains(style, "fill:rgb") && !strings.Contains(style, "fill:none") {
-			subpaths := parsePathDataAsSubpaths(pathData)
-			color := parseColor(style)
-			fillPaths = append(fillPaths, struct {
-				Subpaths [][]Point
-				Color    Color
-			}{subpaths, color})
-		}
+		currentPath = append(currentPath, currentPos)
+		return subpaths, currentPath, currentPos, nil, i + 3
 	}
-
-	return fillPaths
+	return subpaths, currentPath, currentPos, nil, i + 1
 }
 
-// approximateCubicBezier approximates a cubic Bezier curve as line segments
-func approximateCubicBezier(p0, cp1, cp2, p1 Point, segments int) []Point {
-	var points []Point
-
-	for i := 0; i <= segments; i++ {
-		t := float64(i) / float64(segments)
-		mt := 1 - t
-
-		// Cubic Bezier formula
-		x := mt*mt*mt*p0.X +
-			3*mt*mt*t*cp1.X +
-			3*mt*t*t*cp2.X +
-			t*t*t*p1.X
-
-		y := mt*mt*mt*p0.Y +
-			3*mt*mt*t*cp1.Y +
-			3*mt*t*t*cp2.Y +
-			t*t*t*p1.Y
-
-		points = append(points, Point{x, y})
+// handleLineToCommand handles L/l SVG path commands
+func handleLineToCommand(cmd string, tokens []string, i int, currentPath []Point, currentPos Point) ([]Point, Point, *Point, int) {
+	if i+2 < len(tokens) {
+		x, _ := strconv.ParseFloat(tokens[i+1], 64)
+		y, _ := strconv.ParseFloat(tokens[i+2], 64)
+		if cmd == "L" {
+			currentPos = Point{x, y}
+		} else {
+			currentPos = Point{currentPos.X + x, currentPos.Y + y}
+		}
+		currentPath = append(currentPath, currentPos)
+		return currentPath, currentPos, nil, i + 3
 	}
-
-	return points
+	return currentPath, currentPos, nil, i + 1
 }
 
-// parsePathDataAsSubpaths parses SVG path "d" attribute into subpaths
-func parsePathDataAsSubpaths(pathData string) [][]Point {
-	var subpaths [][]Point
+// handleCubicBezierCommand handles C/c SVG path commands
+func handleCubicBezierCommand(cmd string, tokens []string, i int, currentPath []Point, currentPos Point) ([]Point, Point, *Point, int) {
+	if i+6 < len(tokens) {
+		cp1x, _ := strconv.ParseFloat(tokens[i+1], 64)
+		cp1y, _ := strconv.ParseFloat(tokens[i+2], 64)
+		cp2x, _ := strconv.ParseFloat(tokens[i+3], 64)
+		cp2y, _ := strconv.ParseFloat(tokens[i+4], 64)
+		x, _ := strconv.ParseFloat(tokens[i+5], 64)
+		y, _ := strconv.ParseFloat(tokens[i+6], 64)
+		var cp1, cp2, endPoint Point
+		if cmd == "C" {
+			cp1 = Point{cp1x, cp1y}
+			cp2 = Point{cp2x, cp2y}
+			endPoint = Point{x, y}
+		} else {
+			cp1 = Point{currentPos.X + cp1x, currentPos.Y + cp1y}
+			cp2 = Point{currentPos.X + cp2x, currentPos.Y + cp2y}
+			endPoint = Point{currentPos.X + x, currentPos.Y + y}
+		}
+		curvePoints := approximateCubicBezier(currentPos, cp1, cp2, endPoint, bezierSegmentCount)
+		if len(curvePoints) > 1 {
+			currentPath = append(currentPath, curvePoints[1:]...)
+		}
+		return currentPath, endPoint, &cp2, i + 7
+	}
+	return currentPath, currentPos, nil, i + 1
+}
 
-	// Normalize: ensure spaces around commands (both uppercase and lowercase)
-	normalized := pathData
-	normalized = regexp.MustCompile(`([MLCSZmlcsz])`).ReplaceAllString(normalized, " $1 ")
+// handleSmoothCubicBezierCommand handles S/s SVG path commands
+func handleSmoothCubicBezierCommand(cmd string, tokens []string, i int, currentPath []Point, currentPos Point, lastControlPoint *Point) ([]Point, Point, *Point, int) {
+	if i+4 < len(tokens) {
+		cp2x, _ := strconv.ParseFloat(tokens[i+1], 64)
+		cp2y, _ := strconv.ParseFloat(tokens[i+2], 64)
+		x, _ := strconv.ParseFloat(tokens[i+3], 64)
+		y, _ := strconv.ParseFloat(tokens[i+4], 64)
+		var cp1 Point
+		if lastControlPoint != nil {
+			cp1 = Point{2*currentPos.X - lastControlPoint.X, 2*currentPos.Y - lastControlPoint.Y}
+		} else {
+			cp1 = currentPos
+		}
+		var cp2, endPoint Point
+		if cmd == "S" {
+			cp2 = Point{cp2x, cp2y}
+			endPoint = Point{x, y}
+		} else {
+			cp2 = Point{currentPos.X + cp2x, currentPos.Y + cp2y}
+			endPoint = Point{currentPos.X + x, currentPos.Y + y}
+		}
+		curvePoints := approximateCubicBezier(currentPos, cp1, cp2, endPoint, bezierSegmentCount)
+		if len(curvePoints) > 1 {
+			currentPath = append(currentPath, curvePoints[1:]...)
+		}
+		return currentPath, endPoint, &cp2, i + 5
+	}
+	return currentPath, currentPos, nil, i + 1
+}
+
+// handleClosePathCommand handles Z/z SVG path commands
+func handleClosePathCommand(currentPath []Point) []Point {
+	if len(currentPath) > 0 {
+		first := currentPath[0]
+		last := currentPath[len(currentPath)-1]
+		if first.X != last.X || first.Y != last.Y {
+			currentPath = append(currentPath, first)
+		}
+	}
+	return currentPath
+}
+
+// normalizePathData tokenizes and normalizes SVG path data string
+func normalizePathData(pathData string) []string {
+	normalized := regexp.MustCompile(`([MLCSZmlcsz])`).ReplaceAllString(pathData, " $1 ")
 	normalized = strings.ReplaceAll(normalized, ",", " ")
 	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
 	normalized = strings.TrimSpace(normalized)
+	return strings.Fields(normalized)
+}
 
-	tokens := strings.Fields(normalized)
+// parsePathDataAsSubpaths parses SVG path "d" attribute into subpaths
+// SVG numeric parsing: malformed values default to zero, producing degraded but safe render
+func parsePathDataAsSubpaths(pathData string) [][]Point {
+	var subpaths [][]Point
+	tokens := normalizePathData(pathData)
 
 	var currentPath []Point
 	currentPos := Point{0, 0}
@@ -165,130 +199,19 @@ func parsePathDataAsSubpaths(pathData string) [][]Point {
 
 	for i < len(tokens) {
 		cmd := tokens[i]
-
 		switch cmd {
 		case "M", "m":
-			if len(currentPath) > 0 {
-				subpaths = append(subpaths, currentPath)
-				currentPath = nil
-			}
-
-			if i+2 < len(tokens) {
-				x, _ := strconv.ParseFloat(tokens[i+1], 64)
-				y, _ := strconv.ParseFloat(tokens[i+2], 64)
-
-				if cmd == "M" {
-					currentPos = Point{x, y}
-				} else {
-					currentPos = Point{currentPos.X + x, currentPos.Y + y}
-				}
-				currentPath = append(currentPath, currentPos)
-				lastControlPoint = nil
-				i += 3
-			} else {
-				i++
-			}
-
+			subpaths, currentPath, currentPos, lastControlPoint, i = handleMoveToCommand(cmd, tokens, i, currentPath, currentPos, subpaths)
 		case "L", "l":
-			if i+2 < len(tokens) {
-				x, _ := strconv.ParseFloat(tokens[i+1], 64)
-				y, _ := strconv.ParseFloat(tokens[i+2], 64)
-
-				if cmd == "L" {
-					currentPos = Point{x, y}
-				} else {
-					currentPos = Point{currentPos.X + x, currentPos.Y + y}
-				}
-				currentPath = append(currentPath, currentPos)
-				lastControlPoint = nil
-				i += 3
-			} else {
-				i++
-			}
-
+			currentPath, currentPos, lastControlPoint, i = handleLineToCommand(cmd, tokens, i, currentPath, currentPos)
 		case "C", "c":
-			if i+6 < len(tokens) {
-				cp1x, _ := strconv.ParseFloat(tokens[i+1], 64)
-				cp1y, _ := strconv.ParseFloat(tokens[i+2], 64)
-				cp2x, _ := strconv.ParseFloat(tokens[i+3], 64)
-				cp2y, _ := strconv.ParseFloat(tokens[i+4], 64)
-				x, _ := strconv.ParseFloat(tokens[i+5], 64)
-				y, _ := strconv.ParseFloat(tokens[i+6], 64)
-
-				var cp1, cp2, endPoint Point
-
-				if cmd == "C" {
-					cp1 = Point{cp1x, cp1y}
-					cp2 = Point{cp2x, cp2y}
-					endPoint = Point{x, y}
-				} else {
-					cp1 = Point{currentPos.X + cp1x, currentPos.Y + cp1y}
-					cp2 = Point{currentPos.X + cp2x, currentPos.Y + cp2y}
-					endPoint = Point{currentPos.X + x, currentPos.Y + y}
-				}
-
-				curvePoints := approximateCubicBezier(currentPos, cp1, cp2, endPoint, 20)
-				if len(curvePoints) > 1 {
-					currentPath = append(currentPath, curvePoints[1:]...)
-				}
-
-				currentPos = endPoint
-				lastControlPoint = &cp2
-				i += 7
-			} else {
-				i++
-			}
-
+			currentPath, currentPos, lastControlPoint, i = handleCubicBezierCommand(cmd, tokens, i, currentPath, currentPos)
 		case "S", "s":
-			if i+4 < len(tokens) {
-				cp2x, _ := strconv.ParseFloat(tokens[i+1], 64)
-				cp2y, _ := strconv.ParseFloat(tokens[i+2], 64)
-				x, _ := strconv.ParseFloat(tokens[i+3], 64)
-				y, _ := strconv.ParseFloat(tokens[i+4], 64)
-
-				var cp1 Point
-				if lastControlPoint != nil {
-					cp1 = Point{
-						2*currentPos.X - lastControlPoint.X,
-						2*currentPos.Y - lastControlPoint.Y,
-					}
-				} else {
-					cp1 = currentPos
-				}
-
-				var cp2, endPoint Point
-
-				if cmd == "S" {
-					cp2 = Point{cp2x, cp2y}
-					endPoint = Point{x, y}
-				} else {
-					cp2 = Point{currentPos.X + cp2x, currentPos.Y + cp2y}
-					endPoint = Point{currentPos.X + x, currentPos.Y + y}
-				}
-
-				curvePoints := approximateCubicBezier(currentPos, cp1, cp2, endPoint, 20)
-				if len(curvePoints) > 1 {
-					currentPath = append(currentPath, curvePoints[1:]...)
-				}
-
-				currentPos = endPoint
-				lastControlPoint = &cp2
-				i += 5
-			} else {
-				i++
-			}
-
+			currentPath, currentPos, lastControlPoint, i = handleSmoothCubicBezierCommand(cmd, tokens, i, currentPath, currentPos, lastControlPoint)
 		case "Z", "z":
-			if len(currentPath) > 0 {
-				first := currentPath[0]
-				last := currentPath[len(currentPath)-1]
-				if first.X != last.X || first.Y != last.Y {
-					currentPath = append(currentPath, first)
-				}
-			}
+			currentPath = handleClosePathCommand(currentPath)
 			lastControlPoint = nil
 			i++
-
 		default:
 			i++
 		}
@@ -302,6 +225,7 @@ func parsePathDataAsSubpaths(pathData string) [][]Point {
 }
 
 // parseColor extracts RGB color from SVG style attribute
+// SVG numeric parsing: malformed values default to zero, producing degraded but safe render
 func parseColor(styleAttr string) Color {
 	// Try RGB format: rgb(255, 0, 0)
 	rgbRe := regexp.MustCompile(`rgb\((\d+),\s*(\d+),\s*(\d+)\)`)
@@ -326,153 +250,4 @@ func parseColor(styleAttr string) Color {
 
 	// Default white
 	return Color{255, 255, 255}
-}
-
-// computeScanlineRanges computes filled pixel ranges using non-zero winding rule
-func computeScanlineRanges(allSubpaths [][]Point, color Color, scaleX, scaleY, offsetX, offsetY float64) []ScanlineRange {
-	var ranges []ScanlineRange
-
-	if len(allSubpaths) == 0 {
-		return ranges
-	}
-
-	// Scale and offset all points
-	var scaledSubpaths [][]Point
-	for _, subpath := range allSubpaths {
-		var scaledPath []Point
-		for _, pt := range subpath {
-			scaledPath = append(scaledPath, Point{
-				pt.X*scaleX + offsetX,
-				pt.Y*scaleY + offsetY,
-			})
-		}
-		scaledSubpaths = append(scaledSubpaths, scaledPath)
-	}
-
-	// Find bounds
-	minY := 10000.0
-	maxY := -10000.0
-	for _, subpath := range scaledSubpaths {
-		for _, pt := range subpath {
-			if pt.Y < minY {
-				minY = pt.Y
-			}
-			if pt.Y > maxY {
-				maxY = pt.Y
-			}
-		}
-	}
-
-	// Scanline fill using non-zero winding rule
-	for scanY := int(minY); scanY < int(maxY)+1; scanY++ {
-		scanYFloat := float64(scanY)
-		var intersections []Intersection
-
-		// Collect intersections from all subpaths
-		for _, scaledPoints := range scaledSubpaths {
-			for i := 0; i < len(scaledPoints)-1; i++ {
-				y1 := scaledPoints[i].Y
-				y2 := scaledPoints[i+1].Y
-
-				// Check if edge crosses scanline
-				if (y1 < scanYFloat && y2 >= scanYFloat) || (y2 < scanYFloat && y1 >= scanYFloat) {
-					x1 := scaledPoints[i].X
-					x2 := scaledPoints[i+1].X
-
-					// Calculate intersection x
-					intersectX := x1 + (scanYFloat-y1)*(x2-x1)/(y2-y1)
-					ix := int(intersectX)
-
-					// Direction: +1 if going up, -1 if going down
-					direction := 1
-					if y1 >= y2 {
-						direction = -1
-					}
-					intersections = append(intersections, Intersection{ix, direction})
-				}
-			}
-		}
-
-		// Sort by x coordinate
-		for i := 0; i < len(intersections); i++ {
-			for j := i + 1; j < len(intersections); j++ {
-				if intersections[j].X < intersections[i].X {
-					intersections[i], intersections[j] = intersections[j], intersections[i]
-				}
-			}
-		}
-
-		// Apply non-zero winding rule
-		windingCount := 0
-		fillStartX := -1
-
-		for _, inter := range intersections {
-			// Check if we were filling and winding becomes 0
-			if windingCount != 0 && windingCount+inter.Direction == 0 {
-				ranges = append(ranges, ScanlineRange{
-					ScanY:  scanY,
-					StartX: fillStartX,
-					EndX:   inter.X,
-					Color:  color,
-				})
-			}
-			// Check if we weren't filling and winding becomes non-zero
-			if windingCount == 0 && windingCount+inter.Direction != 0 {
-				fillStartX = inter.X
-			}
-
-			windingCount += inter.Direction
-		}
-	}
-
-	return ranges
-}
-
-// RenderSvgToBraille renders SVG to a pixel canvas
-func RenderSvgToBraille(svgString string, width, height int) [][]PixelColor {
-	// Create canvas
-	canvas := make([][]PixelColor, height)
-	for i := range canvas {
-		canvas[i] = make([]PixelColor, width)
-		for j := range canvas[i] {
-			canvas[i][j] = PixelColor{0, 0, 0}
-		}
-	}
-
-	fillPaths := parseFillPaths(svgString)
-
-	// Extract SVG dimensions and calculate uniform scale + centering
-	svgWidth, svgHeight := extractSvgDimensions(svgString)
-	offsetX := 0.0
-	offsetY := 0.0
-
-	// Use uniform scale (smaller of the two to fit within canvas)
-	scaleX := float64(width) / svgWidth
-	scaleY := float64(height) / svgHeight
-	scale := scaleX
-	if scaleY < scaleX {
-		scale = scaleY
-	}
-
-	// Center both horizontally and vertically
-	scaledWidth := svgWidth * scale
-	scaledHeight := svgHeight * scale
-	offsetX = (float64(width) - scaledWidth) / 2
-	offsetY = (float64(height) - scaledHeight) / 2
-
-	// Draw all fill paths
-	for _, fp := range fillPaths {
-		ranges := computeScanlineRanges(fp.Subpaths, fp.Color, scale, scale, offsetX, offsetY)
-
-		// Draw filled ranges
-		for _, r := range ranges {
-			for x := r.StartX; x <= r.EndX; x++ {
-				if r.ScanY >= 0 && r.ScanY < height && x >= 0 && x < width {
-					canvas[r.ScanY][x] = PixelColor{r.Color.R, r.Color.G, r.Color.B}
-				}
-			}
-		}
-	}
-
-	return canvas
 }

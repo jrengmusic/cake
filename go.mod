@@ -1,4 +1,4 @@
-module cake
+module github.com/jrengmusic/cake
 
 go 1.21.0
 

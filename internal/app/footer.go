@@ -1,7 +1,7 @@
 package app
 
 import (
-	"cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/ui"
 	"fmt"
 )
 
@@ -69,7 +69,7 @@ func (a *Application) getMenuFooter(width int) string {
 func (a *Application) getConsoleFooter(width int) string {
 	// Determine which shortcut set to use
 	var hintKey string
-	if a.asyncState.IsActive() {
+	if a.asyncState.operationActive {
 		hintKey = "console_running"
 	} else {
 		hintKey = "console_complete"
@@ -92,7 +92,7 @@ func (a *Application) GetDefaultFooterHint() string {
 	case ModePreferences:
 		return "↑↓ navigate │ Enter change │ / back"
 	case ModeConsole:
-		if a.asyncState.IsActive() {
+		if a.asyncState.operationActive {
 			return "Operation in progress..."
 		}
 		return "Press ESC to return to menu"

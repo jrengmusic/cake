@@ -1,12 +1,18 @@
 #!/bin/bash
 set -e
 
-# Detect architecture
-ARCH=$(uname -m)
-case "$ARCH" in
-  x86_64) ARCH_SUFFIX="x64" ;;
-  arm64|aarch64) ARCH_SUFFIX="arm64" ;;
-  *) ARCH_SUFFIX="$ARCH" ;;
+# Detect architecture ($MSYSTEM is authoritative on MSYS2, uname -m lies)
+case "$MSYSTEM" in
+  CLANGARM64) ARCH_SUFFIX="arm64" ;;
+  MINGW64|UCRT64|MSYS) ARCH_SUFFIX="x64" ;;
+  *)
+    ARCH=$(uname -m)
+    case "$ARCH" in
+      x86_64) ARCH_SUFFIX="x64" ;;
+      arm64|aarch64) ARCH_SUFFIX="arm64" ;;
+      *) ARCH_SUFFIX="$ARCH" ;;
+    esac
+    ;;
 esac
 
 APP_NAME="cake"
@@ -17,9 +23,12 @@ BIN_DIR="$INSTALL_ROOT/bin"
 SYMLINK_DIR="$HOME/.local/bin"
 SYMLINK_PATH="$SYMLINK_DIR/$APP_NAME"
 
+# Version from git tag (fallback to "dev")
+VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+
 # Build
-echo "Building $BINARY_NAME..."
-go build -o "$BINARY_NAME" ./cmd/cake
+echo "Building $BINARY_NAME ($VERSION)..."
+go build -ldflags="-s -w -X github.com/jrengmusic/cake/internal.AppVersion=$VERSION" -o "$BINARY_NAME" ./cmd/cake
 
 # Install
 mkdir -p "$BIN_DIR" "$SYMLINK_DIR"

@@ -1,4 +1,4 @@
-# cake Specification v0.1.0
+# cake Specification v0.0.1
 
 ## Overview
 
@@ -22,7 +22,7 @@
 1. **Preference-Style Interface**: Single-page menu with toggleable values (like TIT), no nested submenus
 2. **Dynamic Visibility**: Menu items appear/disappear based on build state and generator capabilities
 3. **System Tool Detection**: Available generators determined by installed tools, not disk scanning
-4. **50/50 Split Layout**: Menu on left half, ASCII banner on right half, both centered
+4. **65/35 Split Layout**: Menu on left half, ASCII banner on right half, both centered
 5. **Build Path Convention**: Strict `Builds/<Generator>/` structure (all generators multi-config)
 6. **Persistent Configuration**: Settings saved to `~/.config/cake/config.toml`
 
@@ -80,6 +80,7 @@ Project directory:
 🏗️  Configuration          Debug           
 🔨  Build                                  
 🧹  Clean                                  
+   Clean All                              
 
 ↑↓ navigate │ Enter select │ Ctrl+C quit │ / preferences
 ```
@@ -362,7 +363,7 @@ last_configuration = "Debug"
 ├─────────────────────────────────────────┤
 │         │                               │
 │  Menu   │         ASCII Banner          │
-│ (50%)   │            (50%)              │
+│ (65%)   │            (35%)              │
 │         │                               │
 ├─────────────────────────────────────────┤
 │ Footer (Hints/Status)                   │
@@ -377,6 +378,8 @@ last_configuration = "Debug"
 | ↓/j | Navigate down | Menu/Preferences |
 | Enter | Execute/Toggle | All menus |
 | Space | Execute/Toggle | All menus |
+| c | Clean | Menu |
+| x | Clean All | Menu |
 | / | Toggle preferences | Menu ↔ Preferences |
 | Esc | Exit/Cancel | Console → Menu, Prefs → Menu |
 | Ctrl+C | Quit (2x to confirm) | All modes |
@@ -459,7 +462,7 @@ The system:
 - [x] Handles CMake operations asynchronously with live output
 - [x] Prevents invalid operations (can't build without generate)
 - [x] Provides clear error messages for all failure modes
-- [x] Maintains 50/50 split layout with centered content
+- [x] Maintains 65/35 split layout with centered content
 - [x] Skips separator rows during navigation automatically
 
 ## Architecture Constraints

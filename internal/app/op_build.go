@@ -1,22 +1,21 @@
 package app
 
 import (
-	"cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/ops"
+	"context"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // startBuildOperation begins the build operation
 func (a *Application) startBuildOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncState.Start()
-	a.outputBuffer.Clear()
-	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
-	a.footerHint = GetFooterMessageText(MessageBuildInProgress)
-	return a, tea.Batch(a.cmdBuildProject(), a.cmdRefreshConsole())
+	a.enterConsoleMode(GetFooterMessageText(MessageBuildInProgress))
+	ctx, cancel := context.WithCancel(context.Background())
+	a.cancelContext = cancel
+	return a, tea.Batch(a.cmdBuildProject(ctx), a.cmdRefreshConsole())
 }
 
 // cmdBuildProject executes the build command
-func (a *Application) cmdBuildProject() tea.Cmd {
+func (a *Application) cmdBuildProject(ctx context.Context) tea.Cmd {
 	return func() tea.Msg {
 		appendCallback, replaceCallback := a.outputCallbacks()
 
@@ -25,6 +24,7 @@ func (a *Application) cmdBuildProject() tea.Cmd {
 		projectRoot := a.projectState.WorkingDirectory
 
 		result := ops.ExecuteBuildProject(
+			ctx,
 			project,
 			config,
 			projectRoot,

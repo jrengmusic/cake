@@ -1,0 +1,64 @@
+version: 2
+
+project_name: cake
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: cake
+    binary: "cake_{{ .Os }}_{{ .Arch }}"
+    main: ./cmd/cake
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/jrengmusic/cake/internal.AppVersion={{.Version}}
+    hooks:
+      post:
+        - cmd: >-
+            codesign --force --options runtime
+            --entitlements ./entitlements.plist
+            --sign "Developer ID Application: Bayu Ardianto (9BDSN9TDX3)"
+            "{{ .Path }}"
+          output: true
+          env:
+            - GOOS={{ .Os }}
+          if: "{{ eq .Os \"darwin\" }}"
+        - cmd: >-
+            xcrun notarytool submit "{{ .Path }}"
+            --keychain-profile notary
+            --wait
+          output: true
+          env:
+            - GOOS={{ .Os }}
+          if: "{{ eq .Os \"darwin\" }}"
+
+archives:
+  - format: binary
+    name_template: "{{ .Binary }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  github:
+    owner: jrengmusic
+    name: cake
+  draft: false
+  prerelease: auto
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^chore:"
+      - "^ci:"

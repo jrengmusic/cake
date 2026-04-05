@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"cake/internal/banner"
+	"github.com/jrengmusic/cake/internal/banner"
 	"embed"
 	"strings"
 
@@ -53,7 +53,7 @@ func RenderReactiveLayout(sizing DynamicSizing, theme Theme, header, content, fo
 
 	contentHeight := sizing.TerminalHeight - HeaderHeight - FooterHeight - 1 // -1 for terminal rendering
 
-	// Header: stick to top, exact height (TIT pattern)
+	// Header: stick to top, exact height
 	headerSection := lipgloss.Place(
 		sizing.TerminalWidth,
 		HeaderHeight,
@@ -70,7 +70,7 @@ func RenderReactiveLayout(sizing DynamicSizing, theme Theme, header, content, fo
 		AlignVertical(lipgloss.Center).
 		Render(content)
 
-	// Footer: stick to bottom, exact height (TIT pattern)
+	// Footer: stick to bottom, exact height
 	footerSection := lipgloss.Place(
 		sizing.TerminalWidth,
 		FooterHeight,
@@ -81,7 +81,7 @@ func RenderReactiveLayout(sizing DynamicSizing, theme Theme, header, content, fo
 			Render(footer),
 	)
 
-	// Join sections vertically - no wrapping Place (TIT pattern)
+	// Join sections vertically - no wrapping Place
 	return lipgloss.JoinVertical(lipgloss.Left, headerSection, contentSection, footerSection)
 }
 
@@ -100,77 +100,4 @@ func renderTooSmallMessage(sizing DynamicSizing, theme Theme) string {
 		lipgloss.Center,
 		centered,
 	)
-}
-
-// RenderConfirmDialog renders a confirmation dialog overlay
-func RenderConfirmDialog(sizing DynamicSizing, theme Theme, header, content, footer string) string {
-	// Too small guard
-	if sizing.IsTooSmall {
-		return renderTooSmallMessage(sizing, theme)
-	}
-
-	// Use theme colors for dialog
-	dialogBg := lipgloss.NewStyle().
-		Background(lipgloss.Color(theme.ConfirmationDialogBackground)).
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color(theme.BoxBorderColor)).
-		Padding(2, 4)
-
-	// Button styles using theme colors
-	yesButton := lipgloss.NewStyle().
-		Background(lipgloss.Color(theme.MenuSelectionBackground)).
-		Foreground(lipgloss.Color(theme.ButtonSelectedTextColor)).
-		Bold(true).
-		Padding(0, 2).
-		Render("[Y] YES")
-
-	noButton := lipgloss.NewStyle().
-		Background(lipgloss.Color(theme.InlineBackgroundColor)).
-		Foreground(lipgloss.Color(theme.ContentTextColor)).
-		Bold(true).
-		Padding(0, 2).
-		Render("[N] NO")
-
-	// Combine message and buttons
-	dialogContent := dialogBg.Render(
-		content + "\n\n" + yesButton + "  " + noButton,
-	)
-
-	// Center the dialog in the content area
-	contentHeight := sizing.TerminalHeight - HeaderHeight - FooterHeight
-
-	// Place dialog in center of content area
-	centeredDialog := lipgloss.Place(
-		sizing.TerminalWidth,
-		contentHeight,
-		lipgloss.Center,
-		lipgloss.Center,
-		dialogContent,
-	)
-
-	// Header: stick to top, exact height (TIT pattern)
-	headerSection := lipgloss.Place(
-		sizing.TerminalWidth,
-		HeaderHeight,
-		lipgloss.Left,
-		lipgloss.Top,
-		header,
-	)
-
-	// Content with dialog overlay
-	contentSection := lipgloss.NewStyle().
-		Width(sizing.TerminalWidth).
-		Height(contentHeight).
-		Render(centeredDialog)
-
-	// Footer: single line, centered
-	footerSection := lipgloss.NewStyle().
-		Width(sizing.TerminalWidth).
-		Height(FooterHeight).
-		Align(lipgloss.Center).
-		Foreground(lipgloss.Color(theme.FooterTextColor)).
-		Render(footer)
-
-	// Join sections
-	return lipgloss.JoinVertical(lipgloss.Left, headerSection, contentSection, footerSection)
 }

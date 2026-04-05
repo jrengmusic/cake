@@ -1,18 +1,14 @@
 package app
 
 import (
-	"cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/ops"
 	"context"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // startGenerateOperation begins the generate/regenerate operation
 func (a *Application) startGenerateOperation() (tea.Model, tea.Cmd) {
-	a.mode = ModeConsole
-	a.asyncState.Start()
-	a.outputBuffer.Clear()
-	a.consoleAutoScroll = true // Re-enable auto-scroll for new operation (TIT pattern)
-	a.footerHint = GetFooterMessageText(MessageSetupInProgress)
+	a.enterConsoleMode(GetFooterMessageText(MessageSetupInProgress))
 
 	// Create cancellable context for process termination
 	ctx, cancel := context.WithCancel(context.Background())

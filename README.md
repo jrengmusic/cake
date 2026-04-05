@@ -46,9 +46,10 @@ All generators use multi-config builds. Debug and Release in the same build dire
 ## Get Started
 
 ```bash
-./build.sh
-./cake
+go install github.com/jrengmusic/cake/cmd/cake@latest
 ```
+
+Or download a pre-built binary from [GitHub Releases](https://github.com/jrengmusic/cake/releases).
 
 **Requirements:** Go 1.21+, CMake, Terminal (70×24 minimum)
 
@@ -77,6 +78,7 @@ All generators use multi-config builds. Debug and Release in the same build dire
 | `g` | Generate/Regenerate |
 | `b` | Build |
 | `c` | Clean |
+| `x` | Clean All |
 | `o` | Open IDE |
 | `Esc` | Back/Cancel |
 | `Ctrl+C` | Exit (press twice) |

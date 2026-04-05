@@ -1,6 +1,6 @@
 package app
 
-import "cake/internal/ui"
+import "github.com/jrengmusic/cake/internal/ui"
 
 // GenerateMenu returns exactly 8 rows using UI package
 func (a *Application) GenerateMenu() []ui.MenuRow {

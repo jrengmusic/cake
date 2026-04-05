@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/jrengmusic/cake/internal"
+
 	"github.com/pelletier/go-toml/v2"
 )
 
@@ -37,14 +39,14 @@ func DefaultConfig() *Config {
 	return &Config{
 		AutoScan: AutoScanConfig{
 			Enabled:         true,
-			IntervalMinutes: 10,
+			IntervalMinutes: internal.DefaultAutoScanInterval,
 		},
 		Appearance: AppearanceConfig{
 			Theme: "gfx",
 		},
 		Build: BuildConfig{
 			LastProject:       "",
-			LastConfiguration: "Debug",
+			LastConfiguration: internal.ConfigDebug,
 		},
 	}
 }
@@ -96,7 +98,7 @@ func Load() (*Config, error) {
 
 	// Apply defaults for missing values
 	if cfg.AutoScan.IntervalMinutes == 0 {
-		cfg.AutoScan.IntervalMinutes = 10
+		cfg.AutoScan.IntervalMinutes = internal.DefaultAutoScanInterval
 	}
 	if cfg.Appearance.Theme == "" {
 		cfg.Appearance.Theme = "gfx"
@@ -176,7 +178,7 @@ func (c *Config) SetLastProject(project string) error {
 // LastConfiguration returns the last chosen configuration (Debug/Release)
 func (c *Config) LastConfiguration() string {
 	if c.Build.LastConfiguration == "" {
-		return "Debug"
+		return internal.ConfigDebug
 	}
 	return c.Build.LastConfiguration
 }
