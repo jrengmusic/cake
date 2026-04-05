@@ -1,4 +1,4 @@
-## What's New in v0.0.2
+## What's New in v0.0.1
 
 - Open Editor: press `o` with Ninja selected to open nvim in build directory
 - Menu label changes dynamically: "Open IDE" for Xcode/VS, "Open Editor" for Ninja
