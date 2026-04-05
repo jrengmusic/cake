@@ -1,8 +1,9 @@
 #!/bin/bash
-# Usage: bash release.sh v0.0.1 "Initial public release"
+# Usage: bash release.sh v0.0.1 "Optional commit message"
+# Release notes come from RELEASE_NOTES.md (update before releasing)
 
-TAG="${1:?Usage: release.sh <tag> <message>}"
-MSG="${2:?Usage: release.sh <tag> <message>}"
+TAG="${1:?Usage: release.sh <tag> [message]}"
+MSG="${2:-$TAG}"
 
 # Delete existing tag if present
 if git rev-parse "$TAG" >/dev/null 2>&1; then

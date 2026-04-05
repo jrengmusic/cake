@@ -55,10 +55,4 @@ release:
   draft: false
   prerelease: auto
 
-changelog:
-  sort: asc
-  filters:
-    exclude:
-      - "^docs:"
-      - "^chore:"
-      - "^ci:"
+release_notes: RELEASE_NOTES.md
