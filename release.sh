@@ -17,4 +17,4 @@ git commit -m "$MSG"
 git tag "$TAG"
 git push origin main "$TAG"
 
-goreleaser release --clean
+goreleaser release --clean --release-notes=RELEASE_NOTES.md

@@ -22,23 +22,11 @@ builds:
       - -X github.com/jrengmusic/cake/internal.AppVersion={{.Version}}
     hooks:
       post:
-        - cmd: >-
-            codesign --force --options runtime
-            --entitlements ./entitlements.plist
-            --sign "Developer ID Application: Bayu Ardianto (9BDSN9TDX3)"
-            "{{ .Path }}"
+        - cmd: ./scripts/post-build.sh
           output: true
           env:
-            - GOOS={{ .Os }}
-          if: "{{ eq .Os \"darwin\" }}"
-        - cmd: >-
-            xcrun notarytool submit "{{ .Path }}"
-            --keychain-profile notary
-            --wait
-          output: true
-          env:
-            - GOOS={{ .Os }}
-          if: "{{ eq .Os \"darwin\" }}"
+            - HOOK_TARGET={{ .Target }}
+            - HOOK_PATH={{ .Path }}
 
 archives:
   - format: binary
@@ -54,5 +42,3 @@ release:
     name: cake
   draft: false
   prerelease: auto
-
-release_notes: RELEASE_NOTES.md
