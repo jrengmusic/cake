@@ -1,6 +1,9 @@
 .opencode/**
 .DS_Store
 
+# goreleaser output
+/dist/
+
 # Binaries
 /cake
 /cake.exe
