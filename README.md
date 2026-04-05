@@ -66,7 +66,7 @@ Or download a pre-built binary from [GitHub Releases](https://github.com/jrengmu
 
 **Open IDE:** Press `o`, Xcode or Visual Studio launches instantly.
 
-**Clean slate:** Press `c`, build directory gone. Start fresh.
+**Clean slate:** Press `c` to clean current project, `x` to nuke everything. Start fresh.
 
 
 ## Navigation
@@ -110,7 +110,7 @@ Or download a pre-built binary from [GitHub Releases](https://github.com/jrengmu
 - Generator detection via system tools
 - Multi-config build path convention
 - Real-time output streaming
-- Preference-style menu (TIT pattern)
+- Preference-style menu
 
 
 ## License

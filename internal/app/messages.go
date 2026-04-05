@@ -83,7 +83,7 @@ func GetFooterMessageText(msgType FooterMessageType) string {
 }
 
 var FooterHints = map[string]string{
-	"menu_navigate":    "[g] Generate [b] Build [c] Clean [o] Open [/] Config ↑↓ select",
+	"menu_navigate":    "[g] Generate [b] Build [c] Clean [x] Clean All [o] Open [/] Config ↑↓ select",
 	"setup_gen_choose": "↑↓ choose project │ Enter select │ ESC back",
 	"ide_choose":       "↑↓ choose IDE project │ Enter select │ ESC back",
 	"editor_choose":    "↑↓ choose build dir │ Enter select │ ESC back",
