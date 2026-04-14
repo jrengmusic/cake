@@ -1,12 +1,14 @@
 package ops
 
 import (
+	"context"
+	"fmt"
+	"os/exec"
+	"path/filepath"
+
 	"github.com/jrengmusic/cake/internal"
 	"github.com/jrengmusic/cake/internal/ui"
 	"github.com/jrengmusic/cake/internal/utils"
-	"context"
-	"os/exec"
-	"path/filepath"
 )
 
 type BuildResult struct {
@@ -15,44 +17,48 @@ type BuildResult struct {
 	Error    string
 }
 
-func buildBuildCommand(ctx context.Context, buildDir, config, projectRoot string, vsEnv []string) *exec.Cmd {
-	args := []string{"--build", buildDir, "--config", config}
-	cmakePath := utils.FindExecutableInEnv("cmake", vsEnv)
-	cmd := exec.CommandContext(ctx, cmakePath, args...)
-	cmd.Dir = projectRoot
-	if len(vsEnv) > 0 {
-		cmd.Env = vsEnv
-	}
-	return cmd
-}
-
-func ExecuteBuildProject(ctx context.Context, generator, config, projectRoot string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) BuildResult {
+func ExecuteBuildProject(ctx context.Context, generator, config, projectRoot string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType), onProcessTreeStarted func(*utils.ProcessTree)) BuildResult {
 	buildDir := filepath.Join(projectRoot, internal.BuildsDirName, utils.GetDirectoryName(generator))
-	cmd := buildBuildCommand(ctx, buildDir, config, projectRoot, vsEnv)
+
+	args := []string{"--build", buildDir, "--config", config}
 
 	appendCallback("Building: "+buildDir, ui.TypeInfo)
 	appendCallback("Project: "+generator, ui.TypeInfo)
 	appendCallback("Configuration: "+config, ui.TypeInfo)
 	appendCallback("", ui.TypeStdout)
 
-	if err := utils.StreamCommand(cmd, appendCallback, replaceCallback); err != nil {
-		appendCallback("ERROR: "+err.Error(), ui.TypeStderr)
-		return BuildResult{Success: false, Error: err.Error()}
+	cmakePath := utils.FindExecutableInEnv("cmake", vsEnv)
+	cmd := exec.CommandContext(ctx, cmakePath, args...)
+	cmd.Dir = projectRoot
+	if len(vsEnv) > 0 {
+		cmd.Env = vsEnv
 	}
 
-	err := cmd.Wait()
+	tree, streamErr := utils.StreamCommand(cmd, appendCallback, replaceCallback, onProcessTreeStarted)
 
-	if ctx.Err() == context.Canceled {
-		return BuildResult{Success: false, Error: "aborted"}
+	result := BuildResult{Success: false}
+	if streamErr != nil {
+		appendCallback("ERROR: "+streamErr.Error(), ui.TypeStderr)
+		result.Error = fmt.Errorf("ExecuteBuildProject: StreamCommand: %w", streamErr).Error()
+	} else {
+		defer tree.Close()
+
+		waitErr := cmd.Wait()
+		abortedByUser := ctx.Err() == context.Canceled
+
+		if abortedByUser {
+			result.Error = "aborted"
+		} else if waitErr != nil {
+			appendCallback("", ui.TypeStdout)
+			appendCallback("ERROR: Build failed", ui.TypeStderr)
+			result.Error = fmt.Errorf("ExecuteBuildProject: cmake --build failed: %w", waitErr).Error()
+		} else {
+			appendCallback("", ui.TypeStdout)
+			appendCallback("Build completed successfully", ui.TypeStatus)
+			result.Success = true
+			result.ExitCode = 0
+		}
 	}
 
-	if err != nil {
-		appendCallback("", ui.TypeStdout)
-		appendCallback("ERROR: Build failed", ui.TypeStderr)
-		return BuildResult{Success: false, Error: err.Error()}
-	}
-
-	appendCallback("", ui.TypeStdout)
-	appendCallback("Build completed successfully", ui.TypeStatus)
-	return BuildResult{Success: true, ExitCode: 0}
+	return result
 }

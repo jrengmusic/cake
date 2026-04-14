@@ -46,6 +46,7 @@ type Application struct {
 	keyDispatcher *KeyDispatcher
 
 	cancelContext context.CancelFunc
+	killTree      func()
 
 	footerHint   string
 	isScanning   bool
@@ -121,9 +122,17 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a.handleAutoScanTick()
 
 	case GenerateCompleteMsg:
-		a.asyncState.operationActive = false
-		if a.asyncState.operationAborted {
-			a.asyncState.operationAborted = false
+		if a.cancelContext != nil {
+			a.cancelContext()
+			a.cancelContext = nil
+		}
+		if a.killTree != nil {
+			a.killTree()
+			a.killTree = nil
+		}
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
 			a.buildAfterGenerate = false
 			a.footerHint = "Operation aborted"
 			return a, nil
@@ -145,9 +154,17 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case BuildCompleteMsg:
-		a.asyncState.operationActive = false
-		if a.asyncState.operationAborted {
-			a.asyncState.operationAborted = false
+		if a.cancelContext != nil {
+			a.cancelContext()
+			a.cancelContext = nil
+		}
+		if a.killTree != nil {
+			a.killTree()
+			a.killTree = nil
+		}
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
 			a.footerHint = "Operation aborted"
 			return a, nil
 		}
@@ -159,9 +176,9 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case CleanCompleteMsg:
-		a.asyncState.operationActive = false
-		if a.asyncState.operationAborted {
-			a.asyncState.operationAborted = false
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
 			a.footerHint = "Operation aborted"
 			return a, nil
 		}
@@ -175,9 +192,9 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case CleanAllCompleteMsg:
-		a.asyncState.operationActive = false
-		if a.asyncState.operationAborted {
-			a.asyncState.operationAborted = false
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
 			a.footerHint = "Operation aborted"
 			return a, nil
 		}
@@ -192,7 +209,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case OpenIDECompleteMsg:
-		a.asyncState.operationActive = false
+		a.asyncState.End()
 		if msg.Success {
 			a.footerHint = "IDE opened successfully"
 		} else {
@@ -201,9 +218,17 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case RegenerateCompleteMsg:
-		a.asyncState.operationActive = false
-		if a.asyncState.operationAborted {
-			a.asyncState.operationAborted = false
+		if a.cancelContext != nil {
+			a.cancelContext()
+			a.cancelContext = nil
+		}
+		if a.killTree != nil {
+			a.killTree()
+			a.killTree = nil
+		}
+		a.asyncState.End()
+		if a.asyncState.IsAborted() {
+			a.asyncState.ClearAborted()
 			a.footerHint = "Operation aborted"
 			return a, nil
 		}
@@ -217,7 +242,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case OpenEditorCompleteMsg:
-		a.asyncState.operationActive = false
+		a.asyncState.End()
 		if msg.Success {
 			a.footerHint = "Editor closed"
 		} else {
@@ -228,7 +253,7 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case OutputRefreshMsg:
 		// Force re-render to display updated console output
 		// If operation still active, schedule next refresh tick
-		if a.asyncState.operationActive {
+		if a.asyncState.IsActive() {
 			return a, tea.Tick(CacheRefreshInterval, func(t time.Time) tea.Msg {
 				return OutputRefreshMsg{}
 			})

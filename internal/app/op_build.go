@@ -1,8 +1,10 @@
 package app
 
 import (
-	"github.com/jrengmusic/cake/internal/ops"
 	"context"
+
+	"github.com/jrengmusic/cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -31,6 +33,9 @@ func (a *Application) cmdBuildProject(ctx context.Context) tea.Cmd {
 			a.vsEnv,
 			appendCallback,
 			replaceCallback,
+			func(tree *utils.ProcessTree) {
+				a.killTree = tree.Close
+			},
 		)
 
 		return BuildCompleteMsg{

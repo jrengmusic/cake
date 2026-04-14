@@ -7,11 +7,7 @@ import (
 
 // startOpenIDEOperation opens the IDE for the selected project
 func (a *Application) startOpenIDEOperation() (tea.Model, tea.Cmd) {
-	a.asyncState.operationActive = true
-	a.asyncState.operationAborted = false
-	a.outputBuffer.Clear()
-	a.footerHint = "Opening IDE..."
-
+	a.startAsyncOperation("Opening IDE...")
 	return a, a.cmdOpenIDE()
 }
 
@@ -41,11 +37,7 @@ func (a *Application) cmdOpenIDE() tea.Cmd {
 
 // startOpenEditorOperation opens the editor in the build directory
 func (a *Application) startOpenEditorOperation() (tea.Model, tea.Cmd) {
-	a.asyncState.operationActive = true
-	a.asyncState.operationAborted = false
-	a.outputBuffer.Clear()
-	a.footerHint = "Opening editor..."
-
+	a.startAsyncOperation("Opening editor...")
 	return a, a.cmdOpenEditor()
 }
 

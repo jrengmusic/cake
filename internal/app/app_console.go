@@ -8,14 +8,19 @@ import (
 	"github.com/jrengmusic/cake/internal/ui"
 )
 
-// enterConsoleMode prepares the application for console output display
-func (a *Application) enterConsoleMode(footerHint string) {
-	a.mode = ModeConsole
-	a.asyncState.operationActive = true
-	a.asyncState.operationAborted = false
+// startAsyncOperation marks the app as running an async operation and clears prior output.
+// Used by operations that do not present a console view (e.g. launching an external IDE).
+func (a *Application) startAsyncOperation(footerHint string) {
+	a.asyncState.Start()
 	a.outputBuffer.Clear()
-	a.consoleAutoScroll = true
 	a.footerHint = footerHint
+}
+
+// enterConsoleMode starts an async operation AND switches the UI to the streaming console view.
+func (a *Application) enterConsoleMode(footerHint string) {
+	a.startAsyncOperation(footerHint)
+	a.mode = ModeConsole
+	a.consoleAutoScroll = true
 }
 
 // cmdRefreshConsole sends periodic refresh messages while async operation is active
@@ -50,7 +55,7 @@ func (a *Application) cmdAutoScanTick() tea.Cmd {
 }
 
 func (a *Application) isAutoScanIdle() bool {
-	return !a.asyncState.operationActive && time.Since(a.lastActivityTime) >= IdleScanThreshold
+	return !a.asyncState.IsActive() && time.Since(a.lastActivityTime) >= IdleScanThreshold
 }
 
 func (a *Application) refreshProjectStateAndMenu() {

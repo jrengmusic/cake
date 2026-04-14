@@ -1,11 +1,12 @@
 package app
 
 import (
+	"time"
+
 	"github.com/jrengmusic/cake/internal/config"
 	"github.com/jrengmusic/cake/internal/state"
 	"github.com/jrengmusic/cake/internal/ui"
 	"github.com/jrengmusic/cake/internal/utils"
-	"time"
 )
 
 func loadTheme(cfg *config.Config) ui.Theme {
@@ -55,7 +56,12 @@ func NewApplication() *Application {
 	cfg, _ := config.Load()
 	theme := loadTheme(cfg)
 
+	// Capture Visual Studio environment before ForceRefresh — Ninja may only be
+	// discoverable via the VS-provided PATH, so detection must run after capture.
+	capturedVSEnv := captureVSEnvironment()
+
 	projectState := state.NewProjectState()
+	projectState.SetVSEnv(capturedVSEnv)
 	projectState.ForceRefresh()
 
 	initialMode, footerHint := initialModeAndHint(projectState, cfg)
@@ -73,6 +79,6 @@ func NewApplication() *Application {
 		outputBuffer:    ui.GetBuffer(),
 		footerHint:      footerHint,
 		quitConfirmTime: time.Now(),
-		vsEnv:           captureVSEnvironment(),
+		vsEnv:           capturedVSEnv,
 	}
 }

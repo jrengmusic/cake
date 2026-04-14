@@ -106,6 +106,34 @@ func FindExecutableInEnv(executable string, env []string) string {
 	return executable
 }
 
+// IsExecutableInVSEnv reports whether an executable exists in any PATH directory of the captured environment
+func IsExecutableInVSEnv(executable string, env []string) bool {
+	const pathPrefix = "PATH="
+	pathValue := ""
+	for _, e := range env {
+		if strings.HasPrefix(strings.ToUpper(e), pathPrefix) {
+			pathValue = e[len(pathPrefix):]
+			break
+		}
+	}
+
+	found := false
+	if pathValue != "" {
+		for _, dir := range strings.Split(pathValue, ";") {
+			dir = strings.TrimSpace(dir)
+			if dir != "" {
+				fullPath := dir + `\` + executable + ".exe"
+				if _, err := os.Stat(fullPath); err == nil {
+					found = true
+					break
+				}
+			}
+		}
+	}
+
+	return found
+}
+
 // DetectInstalledVSVersions returns generator strings for all installed VS versions
 func DetectInstalledVSVersions() []string {
 	_, statErr := os.Stat(vsWhereStandardPath)

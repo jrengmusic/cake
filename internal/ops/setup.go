@@ -1,13 +1,15 @@
 package ops
 
 import (
-	"github.com/jrengmusic/cake/internal"
-	"github.com/jrengmusic/cake/internal/ui"
-	"github.com/jrengmusic/cake/internal/utils"
 	"context"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/jrengmusic/cake/internal"
+	"github.com/jrengmusic/cake/internal/ui"
+	"github.com/jrengmusic/cake/internal/utils"
 )
 
 type SetupResult struct {
@@ -15,53 +17,57 @@ type SetupResult struct {
 	Error   string
 }
 
-func buildSetupCommand(ctx context.Context, workingDir, generator, buildDir string, vsEnv []string) *exec.Cmd {
+func ExecuteSetupProject(ctx context.Context, workingDir, generator, config string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType), onProcessTreeStarted func(*utils.ProcessTree)) SetupResult {
+	if workingDir == "" {
+		return SetupResult{Success: false, Error: "Working directory is empty"}
+	}
+
+	if generator == "" {
+		return SetupResult{Success: false, Error: "Generator is empty"}
+	}
+
+	buildDir := filepath.Join(workingDir, internal.BuildsDirName, utils.GetDirectoryName(generator))
+
 	args := []string{
 		"-G", generator,
 		"-S", workingDir,
 		"-B", buildDir,
 	}
+
+	appendCallback("Running: cmake "+strings.Join(args, " "), ui.TypeInfo)
+	appendCallback("", ui.TypeStdout)
+
 	cmakePath := utils.FindExecutableInEnv("cmake", vsEnv)
 	cmd := exec.CommandContext(ctx, cmakePath, args...)
 	cmd.Dir = workingDir
 	if len(vsEnv) > 0 {
 		cmd.Env = vsEnv
 	}
-	return cmd
-}
 
-func ExecuteSetupProject(ctx context.Context, workingDir, generator, config string, vsEnv []string, appendCallback func(string, ui.OutputLineType), replaceCallback func(string, ui.OutputLineType)) SetupResult {
-	if workingDir == "" {
-		return SetupResult{Success: false, Error: "Working directory is empty"}
-	}
-	if generator == "" {
-		return SetupResult{Success: false, Error: "Generator is empty"}
-	}
+	tree, streamErr := utils.StreamCommand(cmd, appendCallback, replaceCallback, onProcessTreeStarted)
 
-	buildDir := filepath.Join(workingDir, internal.BuildsDirName, utils.GetDirectoryName(generator))
-	cmd := buildSetupCommand(ctx, workingDir, generator, buildDir, vsEnv)
+	result := SetupResult{Success: false}
+	if streamErr != nil {
+		appendCallback("ERROR: "+streamErr.Error(), ui.TypeStderr)
+		result.Error = fmt.Errorf("ExecuteSetupProject: StreamCommand: %w", streamErr).Error()
+	} else {
+		defer tree.Close()
 
-	appendCallback("Running: cmake "+strings.Join(cmd.Args[1:], " "), ui.TypeInfo)
-	appendCallback("", ui.TypeStdout)
+		waitErr := cmd.Wait()
+		abortedByUser := ctx.Err() == context.Canceled
 
-	if err := utils.StreamCommand(cmd, appendCallback, replaceCallback); err != nil {
-		appendCallback("ERROR: "+err.Error(), ui.TypeStderr)
-		return SetupResult{Success: false, Error: err.Error()}
-	}
-
-	err := cmd.Wait()
-
-	if ctx.Err() == context.Canceled {
-		return SetupResult{Success: false, Error: "aborted"}
+		if abortedByUser {
+			result.Error = "aborted"
+		} else if waitErr != nil {
+			appendCallback("", ui.TypeStdout)
+			appendCallback("ERROR: "+waitErr.Error(), ui.TypeStderr)
+			result.Error = fmt.Errorf("ExecuteSetupProject: cmake configure failed: %w", waitErr).Error()
+		} else {
+			appendCallback("", ui.TypeStdout)
+			appendCallback("Setup completed successfully: "+buildDir, ui.TypeStatus)
+			result.Success = true
+		}
 	}
 
-	if err != nil {
-		appendCallback("", ui.TypeStdout)
-		appendCallback("ERROR: "+err.Error(), ui.TypeStderr)
-		return SetupResult{Success: false, Error: err.Error()}
-	}
-
-	appendCallback("", ui.TypeStdout)
-	appendCallback("Setup completed successfully: "+buildDir, ui.TypeStatus)
-	return SetupResult{Success: true}
+	return result
 }

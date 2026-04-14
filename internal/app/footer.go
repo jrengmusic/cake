@@ -1,8 +1,9 @@
 package app
 
 import (
-	"github.com/jrengmusic/cake/internal/ui"
 	"fmt"
+
+	"github.com/jrengmusic/cake/internal/ui"
 )
 
 // GetFooterContent returns the rendered footer for current mode.
@@ -69,7 +70,7 @@ func (a *Application) getMenuFooter(width int) string {
 func (a *Application) getConsoleFooter(width int) string {
 	// Determine which shortcut set to use
 	var hintKey string
-	if a.asyncState.operationActive {
+	if a.asyncState.IsActive() {
 		hintKey = "console_running"
 	} else {
 		hintKey = "console_complete"
@@ -92,7 +93,7 @@ func (a *Application) GetDefaultFooterHint() string {
 	case ModePreferences:
 		return "↑↓ navigate │ Enter change │ / back"
 	case ModeConsole:
-		if a.asyncState.operationActive {
+		if a.asyncState.IsActive() {
 			return "Operation in progress..."
 		}
 		return "Press ESC to return to menu"
@@ -105,19 +106,17 @@ func (a *Application) GetDefaultFooterHint() string {
 func (a *Application) computeConsoleScrollStatus() string {
 	state := &a.consoleState
 
-	// Handle case where MaxScroll is 0 or negative
-	if state.MaxScroll <= 0 {
-		return ""
+	status := ""
+	if state.MaxScroll > 0 {
+		atBottom := state.ScrollOffset >= state.MaxScroll
+		remainingLines := state.MaxScroll - state.ScrollOffset
+
+		if atBottom {
+			status = "(at bottom)"
+		} else {
+			status = fmt.Sprintf("↓ %d more", remainingLines)
+		}
 	}
 
-	atBottom := state.ScrollOffset >= state.MaxScroll
-	remainingLines := state.MaxScroll - state.ScrollOffset
-
-	if atBottom {
-		return "(at bottom)"
-	}
-	if remainingLines > 0 {
-		return fmt.Sprintf("↓ %d more", remainingLines)
-	}
-	return "(can scroll up)"
+	return status
 }

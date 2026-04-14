@@ -88,7 +88,11 @@ func (a *Application) abortActiveOperation() {
 	if a.cancelContext != nil {
 		a.cancelContext()
 	}
-	a.asyncState.operationAborted = true
+	if a.killTree != nil {
+		a.killTree()
+		a.killTree = nil
+	}
+	a.asyncState.Abort()
 	a.outputBuffer.Append("", ui.TypeStdout)
 	a.outputBuffer.Append("Operation aborted by user", ui.TypeStderr)
 	a.outputBuffer.Append("Press ESC to return to menu", ui.TypeInfo)
@@ -113,7 +117,7 @@ func (a *Application) handleOperationKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cm
 		a.consoleAutoScroll = false
 		return a, nil
 	case "esc":
-		if a.asyncState.operationActive {
+		if a.asyncState.IsActive() {
 			a.abortActiveOperation()
 		} else {
 			a.returnToMenuFromConsole()
@@ -126,7 +130,7 @@ func (a *Application) handleOperationKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cm
 }
 
 func (a *Application) handleCtrlC() (tea.Model, tea.Cmd) {
-	if a.asyncState.operationActive {
+	if a.asyncState.IsActive() {
 		a.footerHint = FooterHints["operation_wait"]
 		return a, nil
 	}

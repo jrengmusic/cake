@@ -111,6 +111,70 @@
 
 ## SPRINT HISTORY
 
+## Sprint 6: Ninja via VS Env + Process-Tree Abort + AsyncState SSOT ✅
+
+**Date:** 2026-04-14
+**Duration:** ~3h (two sessions — pre-remote-sync WIP + post-reapply onto new main layout)
+
+### Agents Participated
+- **COUNSELOR** — Diagnosed root causes (ninja not on PATH pre-vcvarsall; build abort no-op; ninja/cl.exe orphans on Windows; misleading menu shortcut); scoped each fix; gated execution; drove iterative audit-remediation loop; planned WIP-branch reconciliation after remote-restructure collision; re-mapped WIP onto new main file layout
+- **Pathfinder** — Surveyed pre-WIP generator detection, build command assembly, ESC abort handler, stream buffering, menu shortcut bindings, git sync state, then mapped WIP file-for-file onto the remote-restructured main (app.go → app_*.go, project.go merge, menu.go → menu_render.go)
+- **Librarian** *(via Engineer)* — Confirmed `golang.org/x/sys/windows` Job Object API names against v0.12.0
+- **Engineer** — Executed in 8 delegations: Ninja VS-env detection; two pre-existing LANGUAGE.md §E violations; ninja progress collapse; abort + tree-kill + bufio bundle; audit remediation (error wrapping, single-exit demux, context leak); menu shortcut fix (later confirmed already-on-main); full reapply onto new main structure with accessor introduction; audit-driven remediation (startAsyncOperation helper, accessor consistency, op_regenerate restructure, computeConsoleScrollStatus single-exit, dead branch + import hygiene)
+- **Auditor** — Four audit passes: pre-WIP, post-WIP, post-reapply, post-remediation. Surfaced BLESSED-E violations driving each remediation loop (undocumented CloseHandle discards, bare error returns, mid-logic returns, context leak, direct field access bypassing accessors, SSOT duplication, mid-logic returns in regenerate + scroll status, dead branch, import grouping)
+
+### Files Modified (20 total)
+- `internal/utils/process_windows.go` — **New.** `StartProcessTree(cmd)` creates Windows Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, starts command, assigns process to job post-start; `ProcessTree.Close()` idempotent via `jobHandle != 0` guard; every `CloseHandle` discard documented with rollback/teardown reasoning
+- `internal/utils/process_stub.go` — **New.** Non-Windows stub: `StartProcessTree` delegates to `cmd.Start()`, `Close()` no-op
+- `internal/utils/msvc.go` — Added `IsExecutableInVSEnv(executable, env) bool` scanning captured PATH for the exe
+- `internal/utils/msvc_stub.go` — Non-Windows `IsExecutableInVSEnv` stub for API parity
+- `internal/utils/stream.go` — `bufio.NewReader` wrapping of stdout/stderr (throughput); new `ninjaProgressPattern` regex + `lastEmittedWasProgress` state routes `\n`-terminated `[N/M]` lines through `replaceCallback` (progress collapse without TTY); `StreamCommand` now returns `(*ProcessTree, error)` and accepts `onProcessTreeStarted` callback; every error return wrapped with `fmt.Errorf("StreamCommand: site: %w", err)`
+- `internal/ops/build.go` — Accept `ctx context.Context` (first param) + `onProcessTreeStarted` callback (last); use `exec.CommandContext`; single-exit demux — streamErr branch sets `result.Error`, success branch has `defer tree.Close()` and nested `abortedByUser || waitErr != nil || success` demux; one `return result` at function end; `fmt.Errorf` context on all errors
+- `internal/ops/setup.go` — `onProcessTreeStarted` callback param; matching single-exit demux shape; `fmt.Errorf` context; top-of-scope precondition guards preserved
+- `internal/state/project.go` — Added `vsEnv []string` field + `SetVSEnv` setter; `DetectAvailableProjects()` moved out of `NewProjectState` constructor into `ForceRefresh` so it runs after `SetVSEnv`; `SetSelectedProject` rewritten with `found` boolean + single exit (removed mid-loop return)
+- `internal/state/project_scan.go` — `checkNinjaAvailable()` method: tries `exec.LookPath("ninja")` first, falls back to `utils.IsExecutableInVSEnv("ninja", ps.vsEnv)`; `DetectAvailableProjects` calls it instead of direct `checkCommandExists("ninja")`
+- `internal/app/init.go` — Reordered `NewApplication`: `captureVSEnvironment()` → `NewProjectState` → `SetVSEnv(capturedVSEnv)` → `ForceRefresh` (detection now runs with vsEnv populated); `_ = SomeFunc()` discards documented with reason comments
+- `internal/app/async_state.go` — Rewrote with accessor API: `Start`, `End`, `Abort`, `ClearAborted`, `IsActive`, `IsAborted`, `CanExit`, `SetExitAllowed`; fields lowercased (`operationActive`, `operationAborted`, `exitAllowed`) to enforce Tell-Don't-Ask; rationale comment on accessor group
+- `internal/app/app.go` — Added `killTree func()` field; `BuildCompleteMsg` / `GenerateCompleteMsg` / `RegenerateCompleteMsg` handlers clear `cancelContext` + `killTree` (call if non-nil, then nil) at top of handler before remaining logic; accessor calls (`asyncState.End()`, `IsAborted()`, `ClearAborted()`) replace direct field mutations
+- `internal/app/app_console.go` — New `startAsyncOperation(hint)` helper (Start + Clear + footerHint, no mode switch); `enterConsoleMode` now delegates to it then adds `mode = ModeConsole` + `consoleAutoScroll = true`; `isAutoScanIdle` uses `asyncState.IsActive()`
+- `internal/app/app_keys.go` — `abortActiveOperation` calls `killTree` (nil-guarded) then `asyncState.Abort()`; ESC and `handleCtrlC` use `asyncState.IsActive()`
+- `internal/app/app_render.go` — `asyncState.IsActive()` replaces direct field read (line 54)
+- `internal/app/footer.go` — `asyncState.IsActive()` replaces two direct field reads; `computeConsoleScrollStatus` single-exit via `status` local + positive nesting, unreachable else-branch removed, imports reordered to canonical stdlib-then-third-party grouping
+- `internal/app/op_build.go` — `ctx, cancel := context.WithCancel(background)`, store `a.cancelContext = cancel`, pass ctx to `ExecuteBuildProject`, closure sets `a.killTree = tree.Close` via callback
+- `internal/app/op_generate.go` — Same pattern for generate; `killTree` wired into `ExecuteSetupProject` call
+- `internal/app/op_regenerate.go` — `killTree` wired into `ExecuteSetupProject`; clean-step restructured to positive nesting with `cleanSucceeded` bool + `cleanErr`; single return at function end; `fmt.Errorf("cmdRegenerateProject: remove build dir: %w", err)` wraps the remove error
+- `internal/app/op_open.go` — `startOpenIDEOperation` and `startOpenEditorOperation` delegate to `a.startAsyncOperation(hint)` (SSOT — no inlined state setup); IDE/editor launches deliberately do NOT switch to console mode
+- `go.mod` — Promoted `golang.org/x/sys v0.12.0` from indirect to direct
+
+### Alignment Check
+- [x] BLESSED principles followed (B: Job Object binds process-tree lifetime to job handle, RAII-style via idempotent Close; L: functions within 30-line limit; E: single-exit demux, positive nesting, `fmt.Errorf` wrapping, documented error discards, no magic values; S-SSOT: `startAsyncOperation` helper eliminates duplicated state setup across op_open / enterConsoleMode; S-Stateless: `vsEnv` is a captured input, not mutable machinery state; E-Encapsulation: `AsyncState` accessor API prevents bypass; D: emerges from B+E+S)
+- [x] carol/NAMES.md adhered (`SetVSEnv`, `checkNinjaAvailable`, `IsExecutableInVSEnv`, `ninjaProgressPattern`, `matchesNinjaProgress`, `shouldReplace`, `lastEmittedWasProgress`, `ProcessTree`, `StartProcessTree`, `startAsyncOperation`, `cleanSucceeded`, `cleanErr` — full words, verb-noun where applicable, domain-specific)
+- [x] carol/MANIFESTO.md principles applied (no magic values; guard-topology respected — returns only at top of scope or function end; no shadow state; no dead code — `runningCmd` field removed; `(can scroll up)` dead branch removed; three-branch limit observed throughout)
+- [x] carol/LANGUAGE.md Go overrides respected (`fmt.Errorf("site: action: %w", err)` wrapping on all error paths; every `_ = Func()` has reason comment; guard-topology — returns either top-of-scope precondition/error guards or single exit at function end; mid-logic returns eliminated)
+- [x] Accessor consistency — grep across `internal/app/` confirms `operationActive|operationAborted|exitAllowed` appear only inside `async_state.go`
+
+### Problems Solved
+- **Ninja invisible on Windows** — `ninja.exe` ships only inside VS install, discoverable only after `vcvarsall.bat`. Detection ran before env capture. Fixed by reordering startup + VS-env fallback scan via `IsExecutableInVSEnv`.
+- **Build abort was a no-op** — `runningCmd` field never assigned, `ExecuteBuildProject` accepted no context. Fixed by context propagation end-to-end (startOp → closure → ctx → `exec.CommandContext`).
+- **ninja/cl.exe orphans on abort** — `Process.Kill` on Windows kills only the direct child. Fixed by Windows Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`.
+- **Output throughput bottleneck** — byte-per-syscall reads on busy build output. Fixed by `bufio.NewReader` wrap.
+- **Ninja progress scrolled line-by-line** — when stdout is not a TTY, ninja emits `\n`-terminated lines, no `\r` overwrites. Pattern-based detection routes `[N/M]` progress through `ReplaceLast`.
+- **Misleading menu shortcut** — `k` displayed for Clean but bound to up-nav. Already resolved on remote main as `c`/`x`; verified no-op.
+- **Context leak on normal completion** — `cancelContext` never called on happy path; next op overwrote silently. Fixed in completion message handlers.
+- **Accessor bypass in async state** — 5 sites across app_render/footer/op_open read/wrote `operationActive`/`operationAborted` directly, bypassing the declared `AsyncState` API. Fixed by introducing accessors and replacing all direct access.
+- **SSOT duplication** — op_open inlined Start + Clear + footerHint independent of `enterConsoleMode`. Fixed by extracting `startAsyncOperation(hint)` helper; `enterConsoleMode` wraps it with mode + autoScroll.
+- **Mid-logic returns** — eliminated in `SetSelectedProject` (pre-existing), `ExecuteBuildProject` / `ExecuteSetupProject` post-Wait demux, `streamErr` demux (defer scoped to success branch), `op_regenerate` clean step, `computeConsoleScrollStatus`.
+- **Bare error returns / silent discards** — every error return now wrapped via `fmt.Errorf %w`; every `_ = Func()` documented with reason.
+- **Dead code** — `runningCmd` field + `os/exec` import removed from app.go; unreachable `(can scroll up)` branch removed from footer scroll status; import grouping normalized.
+- **Remote restructure reconciliation** — after remote decomposed `app.go` → `app_*.go`, `state/project.go` → `project_paths.go`/`project_scan.go` (later re-merged back), etc., WIP was committed to `wip-ninja` branch, main was hard-reset to `origin/main`, then WIP was re-applied file-by-file onto the new layout via Pathfinder mapping table. Zero content loss.
+
+### Technical Debt / Follow-up
+- None — all findings resolved in-sprint per ARCHITECT's no-deferral directive. Zero Auditor findings outstanding.
+
+**Status:** ✅ AUDIT PASS — `go build ./...` clean. Ready for commit on `main`.
+
+---
+
 ## Sprint 5: Open Editor for Ninja + Release Polish
 
 **Date:** 2026-04-05

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -34,13 +35,17 @@ func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 		appendCallback("=== Step 1: Clean ===", ui.TypeInfo)
 		appendCallback("", ui.TypeStdout)
 
-		if _, err := os.Stat(buildDir); err == nil {
+		cleanSucceeded := true
+		var cleanErr error
+		if _, statErr := os.Stat(buildDir); statErr == nil {
 			appendCallback("Removing: "+buildDir, ui.TypeStdout)
-			if err := os.RemoveAll(buildDir); err != nil {
+			if removeErr := os.RemoveAll(buildDir); removeErr != nil {
+				cleanSucceeded = false
+				cleanErr = fmt.Errorf("cmdRegenerateProject: remove build dir: %w", removeErr)
 				appendCallback("ERROR: Clean failed", ui.TypeStderr)
-				return RegenerateCompleteMsg{Success: false, Error: err.Error()}
+			} else {
+				appendCallback("Clean completed", ui.TypeStatus)
 			}
-			appendCallback("Clean completed", ui.TypeStatus)
 		} else {
 			appendCallback("No build directory to clean", ui.TypeWarning)
 		}
@@ -49,19 +54,26 @@ func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {
 		appendCallback("=== Step 2: Generate ===", ui.TypeInfo)
 
 		// Step 2: Generate
-		result := ops.ExecuteSetupProject(
-			ctx,
-			projectRoot,
-			project,
-			"",
-			a.vsEnv,
-			appendCallback,
-			replaceCallback,
-		)
-
-		return RegenerateCompleteMsg{
-			Success: result.Success,
-			Error:   result.Error,
+		result := RegenerateCompleteMsg{Success: false}
+		if cleanSucceeded {
+			setupResult := ops.ExecuteSetupProject(
+				ctx,
+				projectRoot,
+				project,
+				"",
+				a.vsEnv,
+				appendCallback,
+				replaceCallback,
+				func(tree *utils.ProcessTree) {
+					a.killTree = tree.Close
+				},
+			)
+			result.Success = setupResult.Success
+			result.Error = setupResult.Error
+		} else {
+			result.Error = cleanErr.Error()
 		}
+
+		return result
 	}
 }

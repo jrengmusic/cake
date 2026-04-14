@@ -23,8 +23,8 @@ func (ps *ProjectState) DetectAvailableProjects() {
 		}
 	}
 
-	// Check Ninja (cross-platform)
-	if ps.checkCommandExists("ninja") {
+	// Check Ninja (cross-platform, including VS-bundled ninja not on system PATH)
+	if ps.checkNinjaAvailable() {
 		ps.AvailableProjects = append(ps.AvailableProjects, Generator{
 			Name:  "Ninja",
 			IsIDE: false,
@@ -47,6 +47,17 @@ func (ps *ProjectState) DetectAvailableProjects() {
 func (ps *ProjectState) checkCommandExists(cmd string) bool {
 	_, err := exec.LookPath(cmd)
 	return err == nil
+}
+
+// checkNinjaAvailable reports whether ninja is reachable — either on system PATH
+// or within the VS-captured environment (for VS-bundled ninja).
+func (ps *ProjectState) checkNinjaAvailable() bool {
+	_, lookErr := exec.LookPath("ninja")
+	found := lookErr == nil
+	if !found {
+		found = utils.IsExecutableInVSEnv("ninja", ps.vsEnv)
+	}
+	return found
 }
 
 // checkVSGeneratorAvailable returns generator strings for all installed VS versions

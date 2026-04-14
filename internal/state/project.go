@@ -35,6 +35,7 @@ type ProjectState struct {
 	RefreshInterval   time.Duration
 	IsConfigured      bool     // Whether CMake has been run (CMakeCache.txt exists)
 	Configs           []string // Available configurations (Debug, Release, etc.) - for multi-config generators
+	vsEnv             []string // Captured Visual Studio environment for executable lookup
 }
 
 // NewProjectState creates a new ProjectState instance
@@ -55,10 +56,13 @@ func NewProjectState() *ProjectState {
 		RefreshInterval:   time.Second * 2,
 	}
 
-	// Detect available projects on startup
-	ps.DetectAvailableProjects()
-
 	return ps
+}
+
+// SetVSEnv stores the captured Visual Studio environment for executable lookup.
+// Must be called before ForceRefresh so Ninja detection can search VS-bundled paths.
+func (ps *ProjectState) SetVSEnv(env []string) {
+	ps.vsEnv = env
 }
 
 // Refresh updates project state from filesystem
@@ -82,6 +86,9 @@ func (ps *ProjectState) ForceRefresh() {
 	cmakePath := filepath.Join(cwd, internal.CMakeListsFile)
 	_, err = os.Stat(cmakePath)
 	ps.HasCMakeLists = (err == nil)
+
+	// Detect available generators — runs after vsEnv is set so VS-bundled tools are visible
+	ps.DetectAvailableProjects()
 
 	ps.scanBuildDirectories(cwd)
 
@@ -163,17 +170,20 @@ func (ps *ProjectState) SetConfiguration(configuration string) {
 	}
 }
 
-// SetSelectedProject sets the selected project directly (used for restoring from config)
+// SetSelectedProject sets the selected project directly (used for restoring from config).
+// If generator is not in AvailableProjects, selection is unchanged — ForceRefresh will
+// fall back to the first available project.
 func (ps *ProjectState) SetSelectedProject(generator string) {
-	// Validate that the project is available
+	found := false
 	for _, gen := range ps.AvailableProjects {
 		if gen.Name == generator {
-			ps.SelectedProject = generator
-			return
+			found = true
+			break
 		}
 	}
-	// If not found in available projects, don't set it
-	// It will fall back to first available on ForceRefresh
+	if found {
+		ps.SelectedProject = generator
+	}
 }
 
 // GetBuildPath returns the build directory path for the selected project

@@ -51,7 +51,7 @@ func (a *Application) renderConsoleMode() string {
 		a.theme,
 		a.sizing.TerminalWidth,
 		consoleHeight,
-		a.asyncState.operationActive,
+		a.asyncState.IsActive(),
 		false,
 		a.consoleAutoScroll,
 	)

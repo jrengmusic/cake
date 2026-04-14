@@ -19,3 +19,7 @@ func DetectInstalledVSVersions() []string {
 func FindExecutableInEnv(executable string, env []string) string {
 	return executable
 }
+
+func IsExecutableInVSEnv(executable string, env []string) bool {
+	return false
+}
