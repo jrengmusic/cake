@@ -32,6 +32,7 @@ func ExecuteSetupProject(ctx context.Context, workingDir, generator, config stri
 		"-G", generator,
 		"-S", workingDir,
 		"-B", buildDir,
+		"-DCMAKE_BUILD_TYPE=" + config,
 	}
 
 	appendCallback("Running: cmake "+strings.Join(args, " "), ui.TypeInfo)
