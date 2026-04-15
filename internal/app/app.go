@@ -60,6 +60,8 @@ type Application struct {
 	lastActivityTime time.Time // Track last user activity for lazy auto-scan
 
 	vsEnv []string // Captured Visual Studio environment (Windows only)
+
+	spinnerFrame int // Current braille spinner animation frame index
 }
 
 func (a *Application) registerKeyHandlers() {
@@ -260,6 +262,16 @@ func (a *Application) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Operation completed, stop sending refresh messages
 		return a, nil
+
+	case SpinnerTickMsg:
+		var cmd tea.Cmd
+		if a.asyncState.IsActive() {
+			a.spinnerFrame++
+			cmd = tea.Tick(SpinnerTickInterval, func(t time.Time) tea.Msg {
+				return SpinnerTickMsg{}
+			})
+		}
+		return a, cmd
 	}
 
 	return a, nil

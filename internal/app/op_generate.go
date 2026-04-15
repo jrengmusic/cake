@@ -4,19 +4,20 @@ import (
 	"context"
 
 	"github.com/jrengmusic/cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/ui"
 	"github.com/jrengmusic/cake/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // startGenerateOperation begins the generate/regenerate operation
 func (a *Application) startGenerateOperation() (tea.Model, tea.Cmd) {
-	a.enterConsoleMode(GetFooterMessageText(MessageSetupInProgress))
+	a.enterConsoleMode(ui.OpGenerate, GetFooterMessageText(MessageSetupInProgress))
 
 	// Create cancellable context for process termination
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelContext = cancel
 
-	return a, tea.Batch(a.cmdGenerateProject(ctx), a.cmdRefreshConsole())
+	return a, tea.Batch(a.cmdGenerateProject(ctx), a.cmdRefreshConsole(), a.cmdSpinnerTick())
 }
 
 // cmdGenerateProject executes the generate/regenerate command

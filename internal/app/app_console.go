@@ -11,14 +11,17 @@ import (
 // startAsyncOperation marks the app as running an async operation and clears prior output.
 // Used by operations that do not present a console view (e.g. launching an external IDE).
 func (a *Application) startAsyncOperation(footerHint string) {
-	a.asyncState.Start()
+	a.asyncState.Start(ui.OpNone)
 	a.outputBuffer.Clear()
 	a.footerHint = footerHint
 }
 
 // enterConsoleMode starts an async operation AND switches the UI to the streaming console view.
-func (a *Application) enterConsoleMode(footerHint string) {
-	a.startAsyncOperation(footerHint)
+func (a *Application) enterConsoleMode(op ui.OpType, footerHint string) {
+	a.spinnerFrame = 0
+	a.asyncState.Start(op)
+	a.outputBuffer.Clear()
+	a.footerHint = footerHint
 	a.mode = ModeConsole
 	a.consoleAutoScroll = true
 }
@@ -28,6 +31,13 @@ func (a *Application) enterConsoleMode(footerHint string) {
 func (a *Application) cmdRefreshConsole() tea.Cmd {
 	return tea.Tick(CacheRefreshInterval, func(t time.Time) tea.Msg {
 		return OutputRefreshMsg{}
+	})
+}
+
+// cmdSpinnerTick drives the spinner animation at its own rate, independent of console refresh
+func (a *Application) cmdSpinnerTick() tea.Cmd {
+	return tea.Tick(SpinnerTickInterval, func(t time.Time) tea.Msg {
+		return SpinnerTickMsg{}
 	})
 }
 

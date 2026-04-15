@@ -48,6 +48,9 @@ type RegenerateCompleteMsg struct {
 // Sent periodically during long-running operations to display streaming output
 type OutputRefreshMsg struct{}
 
+// SpinnerTickMsg drives the spinner animation independently of the console refresh rate
+type SpinnerTickMsg struct{}
+
 // AutoScanTickMsg is sent periodically to trigger auto-scan
 type AutoScanTickMsg struct{}
 

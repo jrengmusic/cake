@@ -1,5 +1,7 @@
 package app
 
+import "github.com/jrengmusic/cake/internal/ui"
+
 // AsyncState tracks async operation state.
 // Accessor methods (End, IsAborted, ClearAborted, IsActive, Abort) enforce
 // Tell-Don't-Ask for operationAborted state transitions and provide a
@@ -8,6 +10,7 @@ type AsyncState struct {
 	operationActive  bool
 	operationAborted bool
 	exitAllowed      bool
+	currentOp        ui.OpType
 }
 
 func NewAsyncState() *AsyncState {
@@ -15,17 +18,20 @@ func NewAsyncState() *AsyncState {
 		operationActive:  false,
 		operationAborted: false,
 		exitAllowed:      false,
+		currentOp:        ui.OpNone,
 	}
 }
 
-func (as *AsyncState) Start() {
+func (as *AsyncState) Start(op ui.OpType) {
 	as.operationActive = true
 	as.operationAborted = false
 	as.exitAllowed = false
+	as.currentOp = op
 }
 
 func (as *AsyncState) End() {
 	as.operationActive = false
+	as.currentOp = ui.OpNone
 }
 
 func (as *AsyncState) Abort() {
@@ -50,4 +56,8 @@ func (as *AsyncState) CanExit() bool {
 
 func (as *AsyncState) SetExitAllowed(allowed bool) {
 	as.exitAllowed = allowed
+}
+
+func (as *AsyncState) CurrentOp() ui.OpType {
+	return as.currentOp
 }

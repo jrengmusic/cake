@@ -4,16 +4,17 @@ import (
 	"context"
 
 	"github.com/jrengmusic/cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/ui"
 	"github.com/jrengmusic/cake/internal/utils"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // startBuildOperation begins the build operation
 func (a *Application) startBuildOperation() (tea.Model, tea.Cmd) {
-	a.enterConsoleMode(GetFooterMessageText(MessageBuildInProgress))
+	a.enterConsoleMode(ui.OpBuild, GetFooterMessageText(MessageBuildInProgress))
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelContext = cancel
-	return a, tea.Batch(a.cmdBuildProject(ctx), a.cmdRefreshConsole())
+	return a, tea.Batch(a.cmdBuildProject(ctx), a.cmdRefreshConsole(), a.cmdSpinnerTick())
 }
 
 // cmdBuildProject executes the build command

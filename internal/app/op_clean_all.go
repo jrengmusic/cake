@@ -12,8 +12,8 @@ import (
 
 // startCleanAllOperation begins the clean all operation (removes entire Builds/ directory)
 func (a *Application) startCleanAllOperation() (tea.Model, tea.Cmd) {
-	a.enterConsoleMode("Removing all build artifacts...")
-	return a, tea.Batch(a.cmdCleanAllProject(), a.cmdRefreshConsole())
+	a.enterConsoleMode(ui.OpCleanAll, "Removing all build artifacts...")
+	return a, tea.Batch(a.cmdCleanAllProject(), a.cmdRefreshConsole(), a.cmdSpinnerTick())
 }
 
 // cmdCleanAllProject executes the clean all command (removes entire Builds/ directory)

@@ -14,13 +14,13 @@ import (
 )
 
 func (a *Application) startRegenerateOperation() (tea.Model, tea.Cmd) {
-	a.enterConsoleMode("Regenerating project...")
+	a.enterConsoleMode(ui.OpRegenerate, "Regenerating project...")
 
 	// Create cancellable context for process termination
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancelContext = cancel
 
-	return a, tea.Batch(a.cmdRegenerateProject(ctx), a.cmdRefreshConsole())
+	return a, tea.Batch(a.cmdRegenerateProject(ctx), a.cmdRefreshConsole(), a.cmdSpinnerTick())
 }
 
 func (a *Application) cmdRegenerateProject(ctx context.Context) tea.Cmd {

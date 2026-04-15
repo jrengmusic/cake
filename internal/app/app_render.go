@@ -54,6 +54,9 @@ func (a *Application) renderConsoleMode() string {
 		a.asyncState.IsActive(),
 		false,
 		a.consoleAutoScroll,
+		a.asyncState.IsActive(),
+		a.spinnerFrame,
+		a.asyncState.CurrentOp(),
 	)
 
 	footerText := a.GetFooterContent()

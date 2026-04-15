@@ -6,6 +6,9 @@ const (
 	// CacheRefreshInterval is the UI refresh rate during async operations
 	CacheRefreshInterval = 100 * time.Millisecond
 
+	// SpinnerTickInterval is the independent spinner animation tick rate (decoupled from console refresh)
+	SpinnerTickInterval = 80 * time.Millisecond
+
 	MaxAutoScanInterval   = 60
 	MinAutoScanInterval   = 1
 	AutoScanIntervalStep  = 10

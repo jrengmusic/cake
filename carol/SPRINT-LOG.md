@@ -111,6 +111,65 @@
 
 ## SPRINT HISTORY
 
+## Sprint 7: Braille Spinner in Console Header ✅
+
+**Date:** 2026-04-15
+**Duration:** ~1.5h
+
+### Agents Participated
+- **COUNSELOR** — Discovered existing spinner util in sibling project `tit`; scoped all changes; resolved six iterative ARCHITECT issues (same-color regression, choking spinner, frame-count swap, mid-sprint revert from 24 to 10 frames, two Low audit findings); drove delegation and audit loops
+- **Pathfinder** — Four surveys: cake console/build lifecycle, tit spinner implementation, cake palette + async identification, spinner callsite topology
+- **Librarian** — Researched cli-spinners catalog, identified dots6/dots7 as the only proven 24-frame braille sets
+- **Engineer** — Executed in four delegations: feature scaffold (spinner util copy, OpType enum, SpinnerColor theme field, header render), audit remediation (OpCleanAll/OpRegenerate enums, early-return refactor, magic-string const, whitespace alignment), tick decoupling (SpinnerTickMsg at 80ms), and visible-window render refactor (Pass 1 count / Pass 2 format)
+- **Auditor** — Two audit passes: post-scaffold (1 Medium pre-existing early return + 2 Low) and post-window-refactor (1 Low naming, 1 Low magic number, borderline function length)
+- **Machinist** — Polish pass: verb-rename `countEntryDisplayLines`, named `consolePanelHorizontalPadding` const
+
+### Files Modified (17 total)
+- `internal/ui/spinner.go` — **New.** Classic 10-frame braille set (`⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏`) copied from tit; exports `SpinnerFrames`, `GetSpinnerFrame`, `IsSpinnerFrame`, `SpinnerFrameCount`; `spinnerFrameSet` for O(1) lookup
+- `internal/ui/op_type.go` — **New.** `OpType` enum (`OpNone`, `OpBuild`, `OpGenerate`, `OpClean`, `OpCleanAll`, `OpRegenerate`) placed in `ui` package to avoid circular import with `app`
+- `internal/ui/theme.go` — Added `SpinnerColor string` to TOML-parsed `ThemeDefinition.Palette`, runtime `Theme`, and `LoadTheme` mapping
+- `internal/ui/theme_defaults.go` — `spinnerColor` added to all 5 themes (`#FC704C` GFX/preciousPersimmon, `#FD5B68` Spring/wildWatermelon, `#FF3469` Summer/radicalRed, `#F9C94D` Autumn/saffronMango, `#F6F5FA` Winter/whisper); column alignment matched to neighboring entries
+- `internal/ui/console.go` — Added `opLabels` map (BUILDING/CONFIGURING/CLEANING/CLEANING ALL/REGENERATING), `spinnerLabelSeparator`/`fallbackOpLabel`/`minContentHeight`/`consolePanelHorizontalPadding` constants; `assembleConsolePanel` + new `buildConsoleTitle` helper render spinner+label when active, OUTPUT when idle; preserves header width via `lipgloss.Width()`; `RenderConsoleOutput` refactored to positive nested checks (single exit); replaced `formatBufferLines` with Pass 1 `countDisplayLines` + `countEntryDisplayLines` (no rendering) and Pass 2 `formatVisibleLines` + `renderEntry` + `collectVisibleFromEntry` (renders only entries intersecting visible window); `applyScrollState` refactored to take `int totalDisplayLines`, single-exit via `clampScrollOffset` helper
+- `internal/ui/ui_test.go` — `TestExtractVisibleWindow` replaced with `TestCountDisplayLines_Empty` and `TestCountDisplayLines_ShortLines`; all `applyScrollState` callsites updated from `[]string` to `int`
+- `internal/app/async_state.go` — `currentOp ui.OpType` field; `Start(op ui.OpType)` signature; `End()` resets to `OpNone`; `CurrentOp()` getter
+- `internal/app/app.go` — `spinnerFrame int` field (line 64); new `SpinnerTickMsg` case (lines 266-274) with single-exit positive check; `OutputRefreshMsg` case no longer touches spinner
+- `internal/app/app_console.go` — `enterConsoleMode(op ui.OpType, footerHint string)` threads op to `asyncState.Start(op)`; resets `spinnerFrame = 0`; new `cmdSpinnerTick()` at `SpinnerTickInterval`; `startAsyncOperation` passes `ui.OpNone`
+- `internal/app/app_render.go` — `RenderConsoleOutput` called with `a.asyncState.IsActive()`, `a.spinnerFrame`, `a.asyncState.CurrentOp()`
+- `internal/app/constants.go` — Added `SpinnerTickInterval = 80 * time.Millisecond` (decoupled from 100ms `CacheRefreshInterval`)
+- `internal/app/messages.go` — New `SpinnerTickMsg struct{}` type
+- `internal/app/op_build.go` — `ui.OpBuild` passed to `enterConsoleMode`; `cmdSpinnerTick` added to `tea.Batch`
+- `internal/app/op_generate.go` — `ui.OpGenerate` + `cmdSpinnerTick`
+- `internal/app/op_clean.go` — `ui.OpClean` + `cmdSpinnerTick`
+- `internal/app/op_clean_all.go` — `ui.OpCleanAll` + `cmdSpinnerTick`
+- `internal/app/op_regenerate.go` — `ui.OpRegenerate` + `cmdSpinnerTick`
+
+### Alignment Check
+- [x] BLESSED principles followed (B: `spinnerFrame` is transient view state on `Application`, reset on `enterConsoleMode`; L: every new/modified function within 30-line limit, `console.go` 288 lines under 300, max 3 branches respected; E: `RenderConsoleOutput` refactored to single-exit positive-nested form, all new code follows same pattern, named constants for padding/labels/intervals, no magic strings; S-SSOT: `opLabels` map is single source for op→label mapping, `SpinnerColor` single-sourced per theme, `countDisplayLines`/`formatVisibleLines` share cheap line-count formula via `countEntryDisplayLines`; S-Stateless: `OpType` lives in `AsyncState.currentOp`, not shadowed; view reads via `CurrentOp()`; E-Encapsulation: `CurrentOp()` getter has a single proven caller (`app_render`), justified; spinner tick and output tick decoupled — each owns its cadence; D: deterministic — same frame index + op yields same render)
+- [x] carol/NAMES.md adhered (`countEntryDisplayLines`, `countDisplayLines`, `formatVisibleLines`, `renderEntry`, `collectVisibleFromEntry`, `clampScrollOffset`, `cmdSpinnerTick`, `SpinnerTickMsg`, `SpinnerTickInterval`, `SpinnerColor`, `buildConsoleTitle`, `consolePanelHorizontalPadding`, `fallbackOpLabel`, `spinnerLabelSeparator`, `opLabels`, `currentOp` — verbs for functions, nouns for variables, domain-semantic, no type encoding)
+- [x] carol/MANIFESTO.md principles applied (no magic values; all new literals promoted to constants; no early returns in any new/modified code; positive nested checks throughout; label map replaces what would otherwise be a switch at the 3-branch limit; pre-existing early return in `RenderConsoleOutput` resolved in-sprint per no-deferral directive)
+
+### Problems Solved
+- **No progress indicator during async ops** — static "OUTPUT" header gave no feedback during multi-second builds/configures. Added braille spinner + op-specific label while `asyncState.IsActive()`, reverts to "OUTPUT" on completion.
+- **Theme contrast** — added `SpinnerColor` per-theme field so spinner reads visually distinct from the label; colors picked per theme (preciousPersimmon / wildWatermelon / radicalRed / saffronMango / whisper).
+- **Op-type identification** — `AsyncState` previously held no op type, only boolean active/aborted/exitAllowed. Added `currentOp` with enum + getter; 5 callsites thread their op type through `enterConsoleMode`.
+- **Spinner choking under heavy output** — initial implementation tied `spinnerFrame++` to `OutputRefreshMsg` (100ms); spinner stuttered because `formatBufferLines` was O(buffer_size) per View(), blocking the render loop under heavy builds. Fixed in two moves: (1) decoupled spinner tick into dedicated `SpinnerTickMsg` at 80ms, (2) refactored console render to O(visible_height) via Pass 1 cheap count (no rendering) + Pass 2 format-only-visible (walks buffer, skips entries before `scrollOffset`, stops at `contentHeight`).
+- **Circular import risk** — `OpType` originally envisioned in `internal/app` would create an import cycle with `internal/ui` (which needed the enum for label lookup in `buildConsoleTitle`). Placed `OpType` in `internal/ui` instead — it is a view-facing label concept.
+- **Pre-existing early return** — `RenderConsoleOutput` had `if maxWidth <= 0 || totalHeight <= 0 { return "" }` from before this sprint. Refactored in-sprint per "auditor findings never ignored" rule: single-exit, positive nested checks, result initialized to `""` and assigned inside positive branch.
+- **Magic string `"WORKING"` fallback** — promoted to `fallbackOpLabel` constant.
+- **Label ambiguity for clean-all / regenerate** — initial audit flagged reuse of `OpClean`/`OpGenerate` for these ops; ARCHITECT directed distinct enum values + labels "CLEANING ALL" / "REGENERATING".
+
+### Debts Paid
+- None
+
+### Debts Deferred
+- None
+
+**Status:** ✅ AUDIT PASS — `go build ./...` clean, `go test ./internal/ui/...` clean. Ready for commit on `main`.
+
+**Note:** On-disk theme files in `~/.config/cake/themes/` will not contain the new `spinnerColor` key until regenerated (ARCHITECT will regen manually per this sprint's discussion). Code regenerates only when theme files are missing.
+
+---
+
 ## Sprint 6: Ninja via VS Env + Process-Tree Abort + AsyncState SSOT ✅
 
 **Date:** 2026-04-14

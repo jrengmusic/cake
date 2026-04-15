@@ -7,6 +7,19 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const spinnerLabelSeparator = "  "
+const fallbackOpLabel = "WORKING"
+const minContentHeight = 1
+const consolePanelHorizontalPadding = 2
+
+var opLabels = map[OpType]string{
+	OpBuild:      "BUILDING",
+	OpGenerate:   "CONFIGURING",
+	OpClean:      "CLEANING",
+	OpCleanAll:   "CLEANING ALL",
+	OpRegenerate: "REGENERATING",
+}
+
 // ConsoleOutState holds the scrolling state for console output
 type ConsoleOutState struct {
 	ScrollOffset int
@@ -53,30 +66,36 @@ func RenderConsoleOutput(
 	operationInProgress bool,
 	abortConfirmActive bool,
 	autoScroll bool,
+	isActive bool,
+	spinnerFrame int,
+	op OpType,
 ) string {
-	if maxWidth <= 0 || totalHeight <= 0 {
-		return ""
+	result := ""
+	if maxWidth > 0 {
+		if totalHeight > 0 {
+			consoleHeight := totalHeight
+			titleHeight := 1
+			contentHeight := consoleHeight - titleHeight
+			if contentHeight < minContentHeight {
+				contentHeight = minContentHeight
+			}
+			wrapWidth := maxWidth - consolePanelHorizontalPadding
+
+			state.LinesPerPage = contentHeight
+
+			snapshotLines, totalBufferLines := buffer.GetSnapshot()
+			totalDisplayLines := countDisplayLines(snapshotLines, wrapWidth)
+			applyScrollState(state, totalDisplayLines, contentHeight, autoScroll)
+
+			visibleLines := formatVisibleLines(snapshotLines, totalBufferLines, palette, wrapWidth, state.ScrollOffset, contentHeight)
+			visibleLines = padLinesToWidth(visibleLines, wrapWidth)
+			visibleLines = padLinesToHeight(visibleLines, contentHeight, wrapWidth)
+
+			panel := assembleConsolePanel(visibleLines, palette, wrapWidth, consoleHeight, isActive, spinnerFrame, op)
+			result = lipgloss.NewStyle().Padding(0, 1).Render(panel)
+		}
 	}
-
-	consoleHeight := totalHeight
-	titleHeight := 1
-	contentHeight := consoleHeight - titleHeight
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
-	wrapWidth := maxWidth - 2
-
-	state.LinesPerPage = contentHeight
-
-	allOutputLines := formatBufferLines(buffer, palette, wrapWidth)
-	applyScrollState(state, allOutputLines, contentHeight, autoScroll)
-
-	visibleLines := extractVisibleWindow(allOutputLines, state.ScrollOffset, contentHeight)
-	visibleLines = padLinesToWidth(visibleLines, wrapWidth)
-	visibleLines = padLinesToHeight(visibleLines, contentHeight, wrapWidth)
-
-	panel := assembleConsolePanel(visibleLines, palette, wrapWidth, consoleHeight)
-	return lipgloss.NewStyle().Padding(0, 1).Render(panel)
+	return result
 }
 
 func consoleLineColorMap(palette Theme) map[OutputLineType]string {
@@ -91,36 +110,110 @@ func consoleLineColorMap(palette Theme) map[OutputLineType]string {
 	}
 }
 
-func formatBufferLines(buffer *OutputBuffer, palette Theme, wrapWidth int) []string {
-	snapshotLines, totalBufferLines := buffer.GetSnapshot()
+// countEntryDisplayLines returns the number of display lines an entry occupies at wrapWidth.
+// Cheap — no rendering, just visual width calculation.
+func countEntryDisplayLines(line OutputLine, wrapWidth int) int {
+	formatted := fmt.Sprintf("[%s] %s", line.Time, line.Text)
+	visualWidth := lipgloss.Width(formatted)
+	displayLines := (visualWidth + wrapWidth - 1) / wrapWidth
+	if displayLines < 1 {
+		displayLines = 1
+	}
+	return displayLines
+}
 
-	var allOutputLines []string
+// countDisplayLines walks snapshot entries and returns total display line count.
+// Cheap — no rendering, just visual width calculation.
+func countDisplayLines(snapshotLines []OutputLine, wrapWidth int) int {
+	totalDisplayLines := 0
+	for _, line := range snapshotLines {
+		totalDisplayLines += countEntryDisplayLines(line, wrapWidth)
+	}
+	return totalDisplayLines
+}
+
+// renderEntry renders a single buffer entry and splits it into display lines.
+func renderEntry(line OutputLine, palette Theme, wrapWidth int) []string {
+	colorMap := consoleLineColorMap(palette)
+	color := colorMap[line.Type]
+	if color == "" {
+		color = palette.OutputStdoutColor
+	}
+	lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
+	formatted := fmt.Sprintf("[%s] %s", line.Time, line.Text)
+	renderedLine := lineStyle.Width(wrapWidth).Render(formatted)
+	return strings.Split(renderedLine, "\n")
+}
+
+// collectVisibleFromEntry takes rendered display lines for one entry and appends
+// those that fall within [scrollOffset, scrollOffset+contentHeight), given the
+// entry starts at displayLineBase in the global display-line coordinate space.
+// Returns updated collected slice and updated accumulator.
+func collectVisibleFromEntry(
+	collected []string,
+	entryLines []string,
+	displayLineBase int,
+	scrollOffset int,
+	contentHeight int,
+) []string {
+	for localIdx, displayLine := range entryLines {
+		globalIdx := displayLineBase + localIdx
+		withinWindow := globalIdx >= scrollOffset && len(collected) < contentHeight
+		if withinWindow {
+			collected = append(collected, displayLine)
+		}
+	}
+	return collected
+}
+
+// formatVisibleLines renders ONLY the buffer entries that intersect the visible window.
+// Returns at most contentHeight display lines (or fewer if buffer is small).
+// Preserves empty-buffer "(no output yet)" behavior when totalBufferLines == 0.
+func formatVisibleLines(
+	snapshotLines []OutputLine,
+	totalBufferLines int,
+	palette Theme,
+	wrapWidth int,
+	scrollOffset int,
+	contentHeight int,
+) []string {
+	var visibleLines []string
 
 	if totalBufferLines == 0 {
 		emptyStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color(palette.DimmedTextColor)).
 			Italic(true)
-		allOutputLines = append(allOutputLines, emptyStyle.Render("(no output yet)"))
-		return allOutputLines
+		visibleLines = append(visibleLines, emptyStyle.Render("(no output yet)"))
+	} else {
+		displayLineAccumulator := 0
+		for _, line := range snapshotLines {
+			entryLineCount := countEntryDisplayLines(line, wrapWidth)
+			entryEndLine := displayLineAccumulator + entryLineCount
+			entryInWindow := entryEndLine > scrollOffset && len(visibleLines) < contentHeight
+			if entryInWindow {
+				entryLines := renderEntry(line, palette, wrapWidth)
+				visibleLines = collectVisibleFromEntry(visibleLines, entryLines, displayLineAccumulator, scrollOffset, contentHeight)
+			}
+			displayLineAccumulator += entryLineCount
+		}
 	}
 
-	colorMap := consoleLineColorMap(palette)
-	for _, line := range snapshotLines {
-		color := colorMap[line.Type]
-		if color == "" {
-			color = palette.OutputStdoutColor
-		}
-		lineStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(color))
-		formatted := fmt.Sprintf("[%s] %s", line.Time, line.Text)
-		renderedLine := lineStyle.Width(wrapWidth).Render(formatted)
-		allOutputLines = append(allOutputLines, strings.Split(renderedLine, "\n")...)
-	}
-	return allOutputLines
+	return visibleLines
 }
 
-func applyScrollState(state *ConsoleOutState, allOutputLines []string, contentHeight int, autoScroll bool) {
-	totalOutputLines := len(allOutputLines)
-	maxScroll := totalOutputLines - contentHeight
+func clampScrollOffset(scrollOffset int, maxScroll int) int {
+	clamped := scrollOffset
+	if clamped > maxScroll {
+		clamped = maxScroll
+	}
+	if clamped < 0 {
+		clamped = 0
+	}
+	return clamped
+}
+
+func applyScrollState(state *ConsoleOutState, totalDisplayLines int, contentHeight int, autoScroll bool) {
+	maxScroll := totalDisplayLines - contentHeight
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
@@ -128,33 +221,9 @@ func applyScrollState(state *ConsoleOutState, allOutputLines []string, contentHe
 
 	if autoScroll {
 		state.ScrollOffset = maxScroll
-		return
+	} else {
+		state.ScrollOffset = clampScrollOffset(state.ScrollOffset, maxScroll)
 	}
-
-	if state.ScrollOffset > maxScroll {
-		state.ScrollOffset = maxScroll
-	}
-	if state.ScrollOffset < 0 {
-		state.ScrollOffset = 0
-	}
-}
-
-func extractVisibleWindow(allOutputLines []string, scrollOffset int, contentHeight int) []string {
-	totalOutputLines := len(allOutputLines)
-	start := scrollOffset
-	end := start + contentHeight
-	if start < 0 {
-		start = 0
-	}
-	if end > totalOutputLines {
-		end = totalOutputLines
-	}
-
-	var visibleLines []string
-	for i := start; i < end; i++ {
-		visibleLines = append(visibleLines, allOutputLines[i])
-	}
-	return visibleLines
 }
 
 func padLinesToWidth(lines []string, wrapWidth int) []string {
@@ -175,16 +244,12 @@ func padLinesToHeight(lines []string, contentHeight int, wrapWidth int) []string
 	return lines
 }
 
-func assembleConsolePanel(visibleLines []string, palette Theme, wrapWidth int, consoleHeight int) string {
-	titleStyle := lipgloss.NewStyle().
+func assembleConsolePanel(visibleLines []string, palette Theme, wrapWidth int, consoleHeight int, isActive bool, spinnerFrame int, op OpType) string {
+	labelStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color(palette.OutputInfoColor)).
 		Bold(true)
 
-	title := titleStyle.Render("OUTPUT")
-	titleWidth := lipgloss.Width(title)
-	if titleWidth < wrapWidth {
-		title = title + strings.Repeat(" ", wrapWidth-titleWidth)
-	}
+	title := buildConsoleTitle(labelStyle, palette, wrapWidth, isActive, spinnerFrame, op)
 
 	blankLine := strings.Repeat(" ", wrapWidth)
 	contentBox := strings.Join(visibleLines, "\n")
@@ -199,4 +264,26 @@ func assembleConsolePanel(visibleLines []string, palette Theme, wrapWidth int, c
 		panelLines = panelLines[:consoleHeight]
 	}
 	return strings.Join(panelLines, "\n")
+}
+
+func buildConsoleTitle(labelStyle lipgloss.Style, palette Theme, wrapWidth int, isActive bool, spinnerFrame int, op OpType) string {
+	var title string
+	if isActive {
+		spinnerStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color(palette.SpinnerColor)).
+			Bold(true)
+		frame := spinnerStyle.Render(GetSpinnerFrame(spinnerFrame))
+		label, ok := opLabels[op]
+		if !ok {
+			label = fallbackOpLabel
+		}
+		title = frame + spinnerLabelSeparator + labelStyle.Render(label+" ...")
+	} else {
+		title = labelStyle.Render("OUTPUT")
+	}
+	titleWidth := lipgloss.Width(title)
+	if titleWidth < wrapWidth {
+		title = title + strings.Repeat(" ", wrapWidth-titleWidth)
+	}
+	return title
 }

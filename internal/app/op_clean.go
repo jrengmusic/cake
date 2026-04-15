@@ -2,13 +2,14 @@ package app
 
 import (
 	"github.com/jrengmusic/cake/internal/ops"
+	"github.com/jrengmusic/cake/internal/ui"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // startCleanOperation begins the clean operation
 func (a *Application) startCleanOperation() (tea.Model, tea.Cmd) {
-	a.enterConsoleMode(GetFooterMessageText(MessageCleanInProgress))
-	return a, tea.Batch(a.cmdCleanProject(), a.cmdRefreshConsole())
+	a.enterConsoleMode(ui.OpClean, GetFooterMessageText(MessageCleanInProgress))
+	return a, tea.Batch(a.cmdCleanProject(), a.cmdRefreshConsole(), a.cmdSpinnerTick())
 }
 
 // cmdCleanProject executes the clean command

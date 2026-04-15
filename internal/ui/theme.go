@@ -74,6 +74,7 @@ type ThemeDefinition struct {
 		OutputWarningColor string `toml:"outputWarningColor"`
 		OutputDebugColor   string `toml:"outputDebugColor"`
 		OutputInfoColor    string `toml:"outputInfoColor"`
+		SpinnerColor       string `toml:"spinnerColor"`
 	} `toml:"palette"`
 }
 
@@ -113,6 +114,7 @@ type Theme struct {
 	OutputWarningColor string
 	OutputDebugColor   string
 	OutputInfoColor    string
+	SpinnerColor       string
 }
 
 // LoadTheme loads a theme from a TOML file
@@ -162,6 +164,7 @@ func LoadTheme(themeFilePath string) (Theme, error) {
 		OutputWarningColor: themeDef.Palette.OutputWarningColor,
 		OutputDebugColor:   themeDef.Palette.OutputDebugColor,
 		OutputInfoColor:    themeDef.Palette.OutputInfoColor,
+		SpinnerColor:       themeDef.Palette.SpinnerColor,
 	}
 
 	return theme, nil

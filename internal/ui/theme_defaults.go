@@ -39,6 +39,7 @@ outputStatusColor = "#01C2D2"         # caribbeanBlue
 outputWarningColor = "#F2AB53"        # safflower
 outputDebugColor = "#33535B"          # mediterranea
 outputInfoColor = "#01C2D2"           # caribbeanBlue
+spinnerColor = "#FC704C"              # preciousPersimmon
 `
 
 // SpringTheme is a spring-themed color palette with greens and vibrant energy
@@ -80,6 +81,7 @@ outputStatusColor = "#4ECB71"         # emerald
 outputWarningColor = "#F67F78"        # froly
 outputDebugColor = "#C8E189"          # yellowGreen
 outputInfoColor = "#37CB9F"           # shamrock
+spinnerColor = "#FD5B68"              # wildWatermelon
 `
 
 // SummerTheme is a summer-themed color palette with electric blues and bright sunshine
@@ -121,6 +123,7 @@ outputStatusColor = "#00FFFF"         # electric cyan
 outputWarningColor = "#FF9700"        # pizazz
 outputDebugColor = "#5E68C1"          # indigo
 outputInfoColor = "#2BC6F0"           # pictonBlue
+spinnerColor = "#FF3469"              # radicalRed
 `
 
 // AutumnTheme is an autumn-themed color palette with rich golds and warm earth tones
@@ -162,6 +165,7 @@ outputStatusColor = "#F5BB09"         # corn
 outputWarningColor = "#E85C03"        # trinidad
 outputDebugColor = "#F09D06"          # tulipTree
 outputInfoColor = "#F48C06"           # tangerine
+spinnerColor = "#F9C94D"              # saffronMango
 `
 
 // WinterTheme is a winter-themed color palette with professional blues and subtle elegance
@@ -203,4 +207,5 @@ outputStatusColor = "#435A98"         # sanMarino
 outputWarningColor = "#CEBAC5"        # lily
 outputDebugColor = "#9BA9D0"          # rockBlue
 outputInfoColor = "#435A98"           # sanMarino
+spinnerColor = "#F6F5FA"              # whisper
 `

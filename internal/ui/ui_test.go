@@ -523,43 +523,29 @@ func TestConfirmationDialog_ContextInitialized(t *testing.T) {
 	}
 }
 
-// --- extractVisibleWindow (white-box) ---
+// --- countDisplayLines (white-box) ---
 
-func makeLines(n int) []string {
-	lines := make([]string, n)
+func makeOutputLines(n int) []OutputLine {
+	lines := make([]OutputLine, n)
 	for i := range lines {
-		lines[i] = "line"
+		lines[i] = OutputLine{Time: "00:00:00", Type: TypeStdout, Text: "line"}
 	}
 	return lines
 }
 
-func TestExtractVisibleWindow(t *testing.T) {
-	tests := []struct {
-		name         string
-		total        int
-		offset       int
-		height       int
-		wantLen      int
-	}{
-		{"exact fit", 10, 0, 10, 10},
-		{"offset 0 height 5", 10, 0, 5, 5},
-		{"offset 5 height 5", 10, 5, 5, 5},
-		{"offset near end", 10, 8, 5, 2},
-		{"offset at end", 10, 10, 5, 0},
-		{"offset beyond total", 10, 15, 5, 0},
-		{"empty lines", 0, 0, 5, 0},
-		// negative offset: end = -3+4=1, start clamped to 0, yields 1 line
-		{"negative offset clamped", 10, -3, 4, 1},
+func TestCountDisplayLines_Empty(t *testing.T) {
+	result := countDisplayLines([]OutputLine{}, 80)
+	if result != 0 {
+		t.Errorf("empty buffer: got %d want 0", result)
 	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			lines := makeLines(tt.total)
-			result := extractVisibleWindow(lines, tt.offset, tt.height)
-			if len(result) != tt.wantLen {
-				t.Errorf("len: got %d want %d", len(result), tt.wantLen)
-			}
-		})
+func TestCountDisplayLines_ShortLines(t *testing.T) {
+	// Each entry "[00:00:00] line" is well under 80 chars → 1 display line each
+	lines := makeOutputLines(5)
+	result := countDisplayLines(lines, 80)
+	if result != 5 {
+		t.Errorf("5 short lines: got %d want 5", result)
 	}
 }
 
@@ -567,8 +553,7 @@ func TestExtractVisibleWindow(t *testing.T) {
 
 func TestApplyScrollState_AutoScroll(t *testing.T) {
 	s := &ConsoleOutState{}
-	lines := makeLines(20)
-	applyScrollState(s, lines, 10, true)
+	applyScrollState(s, 20, 10, true)
 
 	if s.ScrollOffset != s.MaxScroll {
 		t.Errorf("autoScroll: ScrollOffset %d should equal MaxScroll %d", s.ScrollOffset, s.MaxScroll)
@@ -580,8 +565,7 @@ func TestApplyScrollState_AutoScroll(t *testing.T) {
 
 func TestApplyScrollState_NoAutoScroll_OffsetClamped(t *testing.T) {
 	s := &ConsoleOutState{ScrollOffset: 100}
-	lines := makeLines(20)
-	applyScrollState(s, lines, 10, false)
+	applyScrollState(s, 20, 10, false)
 
 	if s.ScrollOffset > s.MaxScroll {
 		t.Errorf("ScrollOffset %d should be clamped to MaxScroll %d", s.ScrollOffset, s.MaxScroll)
@@ -590,8 +574,7 @@ func TestApplyScrollState_NoAutoScroll_OffsetClamped(t *testing.T) {
 
 func TestApplyScrollState_NoAutoScroll_NegativeOffsetClamped(t *testing.T) {
 	s := &ConsoleOutState{ScrollOffset: -5}
-	lines := makeLines(20)
-	applyScrollState(s, lines, 10, false)
+	applyScrollState(s, 20, 10, false)
 
 	if s.ScrollOffset < 0 {
 		t.Errorf("ScrollOffset should be >= 0, got %d", s.ScrollOffset)
@@ -600,8 +583,7 @@ func TestApplyScrollState_NoAutoScroll_NegativeOffsetClamped(t *testing.T) {
 
 func TestApplyScrollState_MaxScrollZeroWhenFewLines(t *testing.T) {
 	s := &ConsoleOutState{}
-	lines := makeLines(3)
-	applyScrollState(s, lines, 10, false)
+	applyScrollState(s, 3, 10, false)
 
 	if s.MaxScroll != 0 {
 		t.Errorf("MaxScroll should be 0 when totalLines < contentHeight, got %d", s.MaxScroll)
@@ -610,9 +592,9 @@ func TestApplyScrollState_MaxScrollZeroWhenFewLines(t *testing.T) {
 
 func TestApplyScrollState_MaxScrollCalculation(t *testing.T) {
 	tests := []struct {
-		totalLines    int
-		contentHeight int
-		wantMaxScroll int
+		totalDisplayLines int
+		contentHeight     int
+		wantMaxScroll     int
 	}{
 		{20, 10, 10},
 		{10, 10, 0},
@@ -622,11 +604,10 @@ func TestApplyScrollState_MaxScrollCalculation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		s := &ConsoleOutState{}
-		lines := makeLines(tt.totalLines)
-		applyScrollState(s, lines, tt.contentHeight, false)
+		applyScrollState(s, tt.totalDisplayLines, tt.contentHeight, false)
 		if s.MaxScroll != tt.wantMaxScroll {
 			t.Errorf("total=%d height=%d: MaxScroll got %d want %d",
-				tt.totalLines, tt.contentHeight, s.MaxScroll, tt.wantMaxScroll)
+				tt.totalDisplayLines, tt.contentHeight, s.MaxScroll, tt.wantMaxScroll)
 		}
 	}
 }
