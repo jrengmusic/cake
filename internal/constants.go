@@ -1,11 +1,22 @@
 package internal
 
+import "runtime/debug"
+
 // Version information (SSOT)
 const AppName = "cake" // Application name
 
-// AppVersion is set at build time via -ldflags "-X github.com/jrengmusic/cake/internal.AppVersion=vX.Y.Z"
-// Defaults to "dev" for untagged local builds
-var AppVersion = "dev"
+// AppVersion is injected at build time via ldflags.
+// Falls back to module version (populated by go install module@version),
+// then "dev" for local builds.
+var AppVersion = getVersion()
+
+func getVersion() string {
+	info, ok := debug.ReadBuildInfo()
+	if ok && info.Main.Version != "(devel)" && info.Main.Version != "" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 // Filesystem names (SSOT)
 const (
