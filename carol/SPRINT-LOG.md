@@ -111,6 +111,108 @@
 
 ## SPRINT HISTORY
 
+## Sprint 9: Front View Foundation + jam_tui KeyPress/LookAndFeel
+
+**Date:** 2026-04-25 — 2026-04-26
+**Duration:** ~6h (two sessions)
+
+### Agents Participated
+- **COUNSELOR** — Planned KeyPress replacement, LookAndFeel bridge, serializer transparency fix, front view strip-down; drove all discussion gates; delegated to Engineer/Pathfinder/Auditor
+- **Pathfinder** — 8 surveys: Ctrl+C input pipeline, END keypress patterns, jam::Function::Map, KeyType/KeyEvent full usage audit, juce::LookAndFeel internals, JamFontsBinaryData dependency chain, serializer Color::mode behavior, jam git status
+- **Engineer** — 5 delegations: KeyPress+KeyEvent replacement across jam_tui+CAKE, LookAndFeel+Component colour chain (then reverted), LookAndFeel_V4 inheritance + Component simplification, front view strip-down (MainComponent+Header+Main.cpp), misc fixes (jam_tui.cpp include, build.sh debug, cursor hide/show, diagnostic removal)
+
+### jam_tui Files Modified (22 total)
+- `jam_tui/input/jam_tui_key_press.h` — **New.** `jam::tui::KeyPress` handler: quit confirmation via private `juce::Timer` inheritance, `handleQuitConfirmation()`, `isQuitPending()`, `onQuitExpired` callback
+- `jam_tui/input/jam_tui_key_press.cpp` — **New.** 3s timer window, `isTimerRunning()` as state
+- `jam_tui/input/jam_tui_input.h` — Callback signatures: `std::function<void(juce::KeyPress)>` + `std::function<void(const juce::String&)>` onPaste; `ParseResult` struct
+- `jam_tui/input/jam_tui_input.cpp` — Escape table maps to `juce::KeyPress`; `dispatchKey`/`dispatchPaste` split; `resolveTableMiss` for ESC/char/alt+char
+- `jam_tui/input/jam_tui_key_event.h` — **Deleted.** KeyType/KeyEvent eliminated
+- `jam_tui/ansi/jam_tui_component.h` — `handleInput(const juce::KeyPress&)` signature; removed custom setLookAndFeel/getLookAndFeel/findColour/setColour (delegated to juce::Component)
+- `jam_tui/ansi/jam_tui_textbox.h` — `handleInput` signature; `KeyBinding.keyCode` (int); `handlePaste(const juce::String&)` public method
+- `jam_tui/ansi/jam_tui_textbox.cpp` — Binding table uses juce::KeyPress key codes; paste separated from dispatch
+- `jam_tui/ansi/jam_tui_graphics_serialize.cpp` — `fgEscape`/`bgEscape` dispatch on `Color::mode`: theme→`39m`/`49m` (terminal default), palette→`38;5;`/`48;5;`, rgb→`38;2;`/`48;2;`
+- `jam_tui/ansi/jam_tui_writer.cpp` — Diagnostic logging removed from `flush()`
+- `jam_tui/lookandfeel/jam_tui_look_and_feel.h` — Inherits `juce::LookAndFeel_V4`; `ColourIds` enum (defaultTextColourId, defaultBackgroundColourId); constructor registers white default text
+- `jam_tui/lookandfeel/jam_tui_look_and_feel.cpp` — Stripped to empty namespace (all methods inherited)
+- `jam_tui/component/jam_tui_menu.h/.cpp` — `handleInput` signature; `ColourIds` enum (0x3002xxx)
+- `jam_tui/component/jam_tui_console.h/.cpp` — `handleInput` signature; `ColourIds` enum (0x3003xxx)
+- `jam_tui/component/jam_tui_dialog.h/.cpp` — `handleInput` signature; `ColourIds` enum (0x3004xxx)
+- `jam_tui/component/jam_tui_listpane.h/.cpp` — `handleInput` signature; `ColourIds` enum (0x3006xxx)
+- `jam_tui/component/jam_tui_splitpane.h/.cpp` — `handleInput` signature; alt modifier via `getModifiers().isAltDown()`; `ColourIds` enum (0x3007xxx)
+- `jam_tui/component/jam_tui_textpane.h/.cpp` — `handleInput` signature; `ColourIds` enum (0x3008xxx)
+- `jam_tui/component/jam_tui_label.h` — `ColourIds` enum (0x3001xxx)
+- `jam_tui/jam_tui.h` — Include updated: `jam_tui_key_event.h` → `jam_tui_key_press.h`
+- `jam_tui/jam_tui.cpp` — Added `#include "input/jam_tui_key_press.cpp"` to unity build
+
+### CAKE Files Modified (7 total)
+- `Source/MainComponent.h` — Stripped to 4 components (Header, Footer, Banner, Menu); removed Mode dispatch, Preferences, CakeLie, Console, KeyPress, CmakeRunner, asyncState/configState
+- `Source/MainComponent.cpp` — Direct paint (chrome + menu + banner); single Ctrl+C quit; `handleMenuInput` only; `dispatchMenuAction` retains ROW_PROJECT + ROW_CONFIGURATION only
+- `Source/component/Header.h` — Stateless view: `setWorkingDirectory(const String&)` + `paint()`; no VT listener, no spinner
+- `Source/component/Header.cpp` — 3-row layout: grey label, white path, reserved row
+- `Source/Main.cpp` — Removed double `callAsync` wrapping; cursor restore via direct `std::cout << ANSI::CURSOR_SHOW`; `#include <iostream>`
+- `build.sh` — `debug` argument sets `-DCMAKE_BUILD_TYPE=Debug`
+- `CMakeLists.txt` — Added `jam_fonts` to JAM_MODULES (jam_debug transitive dependency)
+
+### Alignment Check
+- [x] BLESSED principles followed (B: KeyPress timer owned by value member, deterministic lifecycle; L: MainComponent stripped from 539 to 285 lines; E: juce::KeyPress replaces reinvented KeyType/KeyEvent, LookAndFeel inherits battle-tested juce::LookAndFeel_V4 instead of parallel implementation; S-SSOT: Color::mode dispatch in serializer — single place for fg/bg escape logic; S-Stateless: Header is pure stateless view, no VT listener; E-Encapsulation: colour resolution delegated to juce::Component, no custom shadowing methods; D: deterministic — same Color::mode always produces same ANSI escape)
+- [x] NAMES.md adhered (handleQuitConfirmation, isQuitPending, onQuitExpired, computePaintRegions, paintChrome, handleMenuInput, dispatchMenuAction, restoreFooterHint — verbs for functions, nouns for data, no type encoding)
+- [x] MANIFESTO.md principles applied (no reinvented wheels — juce::KeyPress replaces KeyType, juce::LookAndFeel_V4 replaces custom colour map; no manual booleans for quit state — `isTimerRunning()` IS the state; positive nested checks throughout; no early returns)
+
+### Problems Solved
+- **Black screen** — every cell emitted `\x1b[48;2;0;0;0m` (RGB black) for `Color::theme` mode. Serializer now emits `\x1b[49m` (terminal default bg reset) for theme mode — ANSI transparency.
+- **Reinvented KeyType/KeyEvent** — jam_tui had its own key representation parallel to `juce::KeyPress`. Replaced throughout with `juce::KeyPress`; bracketed paste delivered via separate callback.
+- **Reinvented LookAndFeel** — `tui::LookAndFeel` had its own colour map parallel to `juce::LookAndFeel`. Now inherits `juce::LookAndFeel_V4` — zero custom colour methods.
+- **Component API shadowed juce::Component** — custom `findColour`/`setColour`/`setLookAndFeel`/`getLookAndFeel` on `tui::Component` shadowed `juce::Component` methods. Removed — JUCE handles colour resolution natively.
+- **Double callAsync** — Input already dispatches to message thread; Main.cpp wrapped in another callAsync. Removed redundant hop.
+- **Cursor not hidden/restored** — Screen didn't hide cursor on start; app didn't restore on exit. Fixed with `hideCursor()` in Screen::start() and direct stdout write in shutdown.
+- **LookAndFeel assertion on exit** — `setLookAndFeel(nullptr)` missing from MainComponent destructor.
+- **build.sh ignored debug argument** — hardcoded Release. Now honours `debug` argument.
+- **jam_fonts missing** — `jam_debug` transitively depends on `jam_fonts` for `JamFontsBinaryData.h`. Added to CMakeLists.txt.
+- **Too many moving parts** — MainComponent had 4 modes, 8 paint handlers, 8 input handlers, CmakeRunner, Preferences, Console. Stripped to front view only (4 components) to establish foundation.
+
+### Debts Paid
+- None
+
+### Debts Deferred
+- None
+
+---
+
+## BRAINSTORMER Handoff: CAKE-cpp Port RFC
+
+**Date:** 2026-04-25
+**Status:** RFC.md written at project root. Ready for COUNSELOR.
+
+### Context
+ARCHITECT is reorganizing jam with END as consumer. Font/typeface restructuring in progress on jam (background, not CAKE's concern). TIT-cpp port is mid-flight at Sprint 2-3, stalled at "can only build what I see" wall — git layer needed before interactive demo.
+
+### Decision: CAKE-cpp first
+ARCHITECT confirmed: port CAKE before resuming TIT Sprint 3. Rationale:
+- CAKE is simpler (8 fixed menu items, no FSMs, no parsers) — faster path to running app
+- Daily driver: ARCHITECT uses cmake constantly during jam work
+- jam_tui hardening: exercises primitives under real daily use before TIT's complex views depend on them
+- All jam modules already implemented — zero forging required
+
+### ARCHITECT Decisions (2026-04-25)
+- Project location: same dir as Go CAKE, Go sources to `___legacy___/`
+- Binary name: `cakec` during port
+- Go CAKE: continues shipping from `___legacy___/`
+- SPEC: write new SPEC for jam (COUNSELOR task)
+- All patterns: TIT-cpp established patterns apply wholesale
+- Font restructuring: not CAKE's concern
+
+### Sequence
+CAKE-cpp → TIT-cpp (resume Sprint 3) → CAROLINE
+
+### RFC Deliverable
+- `RFC.md` at project root — full port scope, architecture, scaffold, phase sequence, BLESSED compliance
+- Estimated 3-5 day MVP (macOS), +1-2 days Windows parity post-MVP
+- 3 suggested sprints: scaffold+state, views+ops, integration+release
+
+---
+
+
+
 ## Sprint 7: Braille Spinner in Console Header ✅
 
 **Date:** 2026-04-15

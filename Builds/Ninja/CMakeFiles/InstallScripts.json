@@ -1,0 +1,11 @@
+{
+	"InstallScripts" : 
+	[
+		"/Users/jreng/Documents/Poems/dev/cake/Builds/Ninja/cmake_install.cmake",
+		"/Users/jreng/Documents/Poems/dev/cake/Builds/Ninja/JUCE/cmake_install.cmake",
+		"/Users/jreng/Documents/Poems/dev/cake/Builds/Ninja/JUCE/modules/cmake_install.cmake",
+		"/Users/jreng/Documents/Poems/dev/cake/Builds/Ninja/JUCE/extras/Build/cmake_install.cmake",
+		"/Users/jreng/Documents/Poems/dev/cake/Builds/Ninja/JUCE/extras/Build/juceaide/cmake_install.cmake"
+	],
+	"Parallel" : false
+}

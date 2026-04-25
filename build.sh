@@ -1,42 +1,43 @@
-#!/bin/bash
+#!/usr/bin/env bash
 set -e
 
-# Detect architecture ($MSYSTEM is authoritative on MSYS2, uname -m lies)
-case "$MSYSTEM" in
-  CLANGARM64) ARCH_SUFFIX="arm64" ;;
-  MINGW64|UCRT64|MSYS) ARCH_SUFFIX="x64" ;;
-  *)
-    ARCH=$(uname -m)
-    case "$ARCH" in
-      x86_64) ARCH_SUFFIX="x64" ;;
-      arm64|aarch64) ARCH_SUFFIX="arm64" ;;
-      *) ARCH_SUFFIX="$ARCH" ;;
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+clear
+
+detect_cpu_count() {
+    case "$(uname -s)" in
+        Darwin)        sysctl -n hw.logicalcpu ;;
+        Linux)         nproc ;;
+        MINGW*|MSYS*)  nproc ;;
+        *)             echo 4 ;;
     esac
-    ;;
-esac
+}
 
-APP_NAME="cake"
-BINARY_NAME="${APP_NAME}_${ARCH_SUFFIX}"
+MODE="${1:-}"
+BUILD_TYPE="Release"
 
-INSTALL_ROOT="$HOME/.${APP_NAME}"
-BIN_DIR="$INSTALL_ROOT/bin"
-SYMLINK_DIR="$HOME/.local/bin"
-SYMLINK_PATH="$SYMLINK_DIR/$APP_NAME"
+if [ "$MODE" = "debug" ]; then
+    BUILD_TYPE="Debug"
+    MODE=""
+fi
 
-# Version from git tag (fallback to "dev")
-VERSION=$(git describe --tags --always 2>/dev/null || echo "dev")
+BUILD_DIR="Builds/Ninja"
 
-# Build
-echo "Building $BINARY_NAME ($VERSION)..."
-go build -ldflags="-s -w -X github.com/jrengmusic/cake/internal.AppVersion=$VERSION" -o "$BINARY_NAME" ./cmd/cake
+if [ "$MODE" = "clean" ]; then
+    echo "Cleaning..."
+    rm -rf "$BUILD_DIR"
+fi
 
-# Install
-mkdir -p "$BIN_DIR" "$SYMLINK_DIR"
-mv "$BINARY_NAME" "$BIN_DIR/"
-chmod +x "$BIN_DIR/$BINARY_NAME"
+if [ "$MODE" = "clean" ] || [ ! -f "$BUILD_DIR/build.ninja" ]; then
+    echo "Configuring ($BUILD_TYPE)..."
+    cmake -S . -B "$BUILD_DIR" -G Ninja -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
+fi
 
-# Symlink (atomic replace)
-ln -sfn "$BIN_DIR/$BINARY_NAME" "$SYMLINK_PATH"
-
-echo "✓ Installed: $BIN_DIR/$BINARY_NAME"
-echo "✓ Symlinked: $SYMLINK_PATH -> $BIN_DIR/$BINARY_NAME"
+if [ "$MODE" != "configure" ]; then
+    echo "Building ($BUILD_TYPE)..."
+    cmake --build "$BUILD_DIR" -- -j"$(detect_cpu_count)"
+    echo "Build succeeded."
+    echo "Binary: $BUILD_DIR/cakec_artefacts/cakec"
+fi

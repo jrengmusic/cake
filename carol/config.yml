@@ -6,8 +6,8 @@ version: "1.0"
 
 project:
   name: "cake"
-  path: "/c/Users/jreng/Documents/Poems/dev/cake"
-  initialized: "2026-04-15"
+  path: "/Users/jreng/Documents/Poems/dev/cake"
+  initialized: "2026-04-25"
 
 carol:
   mode: "symlink"  # or "portable"
