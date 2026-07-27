@@ -9,6 +9,3 @@
 /cake.exe
 /cake_x64
 /cake_arm64
-.clangd
-compile_commands.json
-.cache/
